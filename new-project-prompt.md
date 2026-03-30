@@ -92,21 +92,28 @@ app/
 
 ## Step 5: Create settings.json
 
-Create `.claude/settings.json`:
+Create `.claude/settings.json` with any project-specific plugins needed:
 
 ```json
 {
   "enabledPlugins": {
-    "craft-skills@local": true,
     "playwright@claude-plugins-official": true,
     "typescript-lsp@claude-plugins-official": true
   }
 }
 ```
 
+Do NOT add craft-skills here — it is installed globally via marketplace and is already available.
+
 Adjust plugins based on what the project needs. Common additions:
 - `code-review-graph@code-review-graph` — for large codebases
 - `ui-ux-pro-max@ui-ux-pro-max-skill` — for design-heavy projects
+
+If craft-skills is not yet installed globally, the user should run:
+```
+/plugin marketplace add alexiolan/craft-skills
+/plugin install craft-skills@craft-skills
+```
 
 ## Step 6: Create .env.example
 
@@ -144,9 +151,9 @@ Only scaffold directories — do NOT create placeholder files. Files get created
 
 Present a summary:
 - Project CLAUDE.md created with initial configuration
-- settings.json configured with craft-skills plugin
+- settings.json configured with project-specific plugins
 - Directory structure scaffolded
 - Remind user to:
-  1. Install craft-skills plugin: `claude plugin install /Users/alex/Projects/frontend/craft-skills`
+  1. Verify craft-skills is installed globally (`/plugin list` should show craft-skills)
   2. Start building features using `craft-skills:craft` or `craft-skills:implement`
   3. Run `craft-skills:reflect project` after the first feature is complete to update CLAUDE.md with actual component/hook inventory

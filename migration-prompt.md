@@ -128,17 +128,13 @@ If there are old commands/agents with project-specific customizations NOT covere
 
 Read `.claude/settings.json` and ensure craft-skills is referenced. Remove superpowers if present:
 
-```json
-{
-  "enabledPlugins": {
-    "craft-skills@local": true
-    // ... keep other plugins (playwright, code-review-graph, etc.)
-    // Remove: "superpowers@claude-plugins-official": true
-  }
-}
-```
+Remove `superpowers@claude-plugins-official` from `enabledPlugins` if present. Do NOT add craft-skills to settings.json manually — it is installed as a global plugin via marketplace and is already available.
 
-Note: The user will need to install the plugin via CLI: `claude plugin install /Users/alex/Projects/frontend/craft-skills` or the appropriate command.
+The plugin is installed via:
+```
+/plugin marketplace add alexiolan/craft-skills
+/plugin install craft-skills@craft-skills
+```
 
 ## Step 7: Create Required Directories
 
