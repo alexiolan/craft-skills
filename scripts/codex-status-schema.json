@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Codex Task Status",
+  "type": "object",
+  "required": ["status", "summary", "files_changed", "exports_added"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["DONE", "DONE_WITH_CONCERNS", "NEEDS_CONTEXT", "BLOCKED"],
+      "description": "Outcome of the task"
+    },
+    "summary": {
+      "type": "string",
+      "description": "One- or two-sentence summary of what was done"
+    },
+    "files_changed": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Absolute or project-relative paths of all files created or modified"
+    },
+    "exports_added": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Named exports added (type, class, function, or const names). Empty array if none."
+    },
+    "dependencies_added": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "npm packages added to package.json. Empty array if none."
+    },
+    "concerns": {
+      "type": "string",
+      "description": "When status is DONE_WITH_CONCERNS, describe the concerns. Empty string otherwise."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Optional free-form notes for the orchestrator"
+    }
+  }
+}

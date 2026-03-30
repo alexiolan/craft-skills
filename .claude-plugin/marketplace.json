@@ -1,0 +1,23 @@
+{
+  "name": "craft-skills",
+  "owner": {
+    "name": "alexiolan"
+  },
+  "metadata": {
+    "description": "Structured development skills for any project",
+    "version": "1.3.0"
+  },
+  "plugins": [
+    {
+      "name": "craft-skills",
+      "source": "./",
+      "description": "Structured development skills for any project. Provides brainstorming, planning, parallel agent development, browser testing, systematic debugging, and self-improvement workflows.",
+      "version": "1.3.0",
+      "author": {
+        "name": "alexiolan"
+      },
+      "category": "development",
+      "keywords": ["development", "architecture", "skills", "agents", "brainstorming"]
+    }
+  ]
+}

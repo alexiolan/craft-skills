@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# Auto-bump patch version in package.json, plugin.json, and marketplace.json on each commit
+
+PACKAGE_JSON="package.json"
+PLUGIN_JSON=".claude-plugin/plugin.json"
+MARKETPLACE_JSON=".claude-plugin/marketplace.json"
+
+# Get current version from package.json
+CURRENT_VERSION=$(grep -o '"version": "[^"]*"' "$PACKAGE_JSON" | head -1 | grep -o '[0-9]*\.[0-9]*\.[0-9]*')
+
+if [ -z "$CURRENT_VERSION" ]; then
+  echo "Error: Could not read version from $PACKAGE_JSON"
+  exit 1
+fi
+
+# Split version into parts
+IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+NEW_PATCH=$((PATCH + 1))
+NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+
+# Update package.json
+sed -i '' "s/\"version\": \"$CURRENT_VERSION\"/\"version\": \"$NEW_VERSION\"/g" "$PACKAGE_JSON"
+
+# Update plugin.json and marketplace.json — replace ANY version string, not just the current one
+# This prevents desync when versions diverge (e.g. after a manual major/minor bump)
+for FILE in "$PLUGIN_JSON" "$MARKETPLACE_JSON"; do
+  if [ -f "$FILE" ]; then
+    sed -i '' -E 's/"version": "[0-9]+\.[0-9]+\.[0-9]+"/"version": "'"$NEW_VERSION"'"/g' "$FILE"
+  fi
+done
+
+# Stage the updated files
+git add "$PACKAGE_JSON" "$PLUGIN_JSON" "$MARKETPLACE_JSON"
+
+echo "Version bumped: $CURRENT_VERSION → $NEW_VERSION"

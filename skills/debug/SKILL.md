@@ -1,0 +1,122 @@
+---
+name: debug
+description: "Use when investigating bugs, errors, failing tests, or unexpected behavior. Enforces systematic root-cause investigation BEFORE attempting any fix. Invoke this skill before writing any fix code."
+---
+
+# Debug
+
+Systematic root-cause debugging. No fixes without investigation first.
+
+<HARD-GATE>
+Do NOT attempt any fix until you have completed Phase 1 (Root Cause Investigation) and have a clear hypothesis for what is wrong and why. Guessing at fixes wastes time and can introduce new bugs.
+</HARD-GATE>
+
+## Phase 1: Root Cause Investigation
+
+Before touching any code:
+
+### 1.1 Read the Error
+
+- Read the FULL error message, stack trace, and any logs
+- Don't skim — the answer is often in the details
+- Check browser console, terminal output, and build logs
+
+### 1.2 Reproduce Consistently
+
+- Can you trigger the error reliably?
+- What are the exact steps?
+- Does it happen in all environments or just one?
+
+### 1.3 Check Recent Changes
+
+- `git log --oneline -20` — what changed recently?
+- `git diff HEAD~5` — any suspicious changes?
+- Did this work before? When did it break?
+
+### 1.4 Gather Evidence at Boundaries
+
+Use the **graph → LLM → manual** priority:
+
+**Step 1 — Graph maps the territory (if code-review-graph available):** First, ensure the graph is fresh — run `build_or_update_graph_tool` (incremental, fast if already current). Then use `get_impact_radius_tool` or `query_graph_tool` with `callers_of`/`callees_of`/`imports_of` on the suspect file. This instantly returns the full dependency chain — all callers, callees, and impacted files — without reading a single file. **Do NOT use `get_architecture_overview_tool`, `list_communities_tool`, or `detect_changes_tool`** — all three can overflow context (90-300K chars). Use targeted queries only.
+
+**Step 2 — LLM reads the code (MANDATORY). Check LM Studio first (Bash tool, wait for result):**
+```bash
+CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && curl -s --max-time 2 ${LLM_URL:-http://127.0.0.1:1234} > /dev/null 2>&1 && echo "LLM_AVAILABLE:$CRAFT_SCRIPTS" || echo "LLM_UNAVAILABLE"
+```
+
+If `LLM_AVAILABLE`, run with Bash tool (`run_in_background: true`, timeout 300000ms):
+```bash
+bash "$CRAFT_SCRIPTS/llm-agent.sh" "Read these files and find where data breaks: [2-3 key files from graph chain]. Report the data flow and any anomalies." <project-root>
+```
+
+Then unload: `bash "$CRAFT_SCRIPTS/llm-unload.sh"`. If `LLM_UNAVAILABLE`, read the key files directly. Filter out false positives about plugins/skills.
+
+**Scoping rule:** Always list specific file paths — never ask the agent to "explore" or "search the whole project." Broad prompts cause max-iteration failures.
+
+Graph provides the map (which files matter), agent provides the understanding (what the code does). Together they handle complex multi-service traces that neither could do alone — graph prevents agent from wandering, agent provides code-level insight that graph can't. **Claude's role is to interpret the findings, not to read the files.**
+
+**Fallback — if graph unavailable:** Use Grep to trace imports/exports of the suspect file manually, then pass those files to the LLM agent.
+**Fallback — if LLM unavailable:** Use graph results to identify the key 2-3 files, then read them directly.
+**Fallback — if both unavailable:** Manual trace with Grep + Read.
+
+Also check directly:
+- Check API request/response (network tab, service layer logs)
+- Check function inputs/props (are they what you expect?)
+- Check state (data cache, form/app state)
+- Check domain boundaries (are imports correct?)
+
+### 1.5 Trace the Data Flow
+
+Follow the data from source to symptom:
+```
+API Response → Service Layer → Data Cache → Component/Handler → Rendered Output
+```
+
+Where in this chain does the data go wrong?
+
+## Phase 2: Pattern Analysis
+
+Is this a known pattern?
+
+| Pattern | Check |
+|---|---|
+| Architecture boundary violation | Import from another business module? |
+| Data cache stale | Missing cache invalidation after mutation? |
+| Validation gap | Schema doesn't match input fields? |
+| Type mismatch | API model differs from app-side type? |
+| Missing loading state | Data undefined during fetch? |
+
+## Phase 3: Hypothesis & Testing
+
+1. **State your hypothesis clearly**: "The bug occurs because X, which causes Y"
+2. **Design a test**: How can you verify this hypothesis?
+3. **Test it**: Add a console.log, check a value, reproduce with specific inputs
+4. **Confirm or reject**: Does the evidence support your hypothesis?
+
+If rejected, return to Phase 1 with new information.
+
+## Phase 4: Implementation
+
+Only now do you write the fix:
+
+1. **Fix the root cause**, not the symptom
+2. **Verify the fix**: Run the reproduction steps — is the bug gone?
+3. **Check for regressions**: Run lint, tsc, build
+4. **Verify related functionality**: Did the fix break anything nearby?
+
+### Escalation Rule
+
+After 3+ failed fix attempts:
+- **STOP** trying more fixes
+- **Question the architecture**: Is the component/hook/pattern fundamentally wrong?
+- **Consider a redesign**: Sometimes the fix is a larger refactor
+- **Ask the user**: Present what you've tried, what you've learned, and propose alternatives
+
+## Anti-Patterns
+
+Do NOT:
+- Apply a fix before understanding the root cause
+- Assume the first error you see is the root cause (it may be a symptom)
+- Add defensive code (try/catch, null checks) to hide the real problem
+- Change multiple things at once — isolate variables
+- Keep trying variations of the same approach

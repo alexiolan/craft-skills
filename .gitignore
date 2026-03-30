@@ -1,0 +1,14 @@
+.worktrees/
+.idea/
+.DS_Store
+*.swp
+*.swo
+*~
+.claude/settings.local.json
+.shared-state.md
+.craft-profile
+.llm-task-*.txt
+.codex-prompt-*.txt
+.codex-output-*.json
+AGENTS.md
+node_modules/

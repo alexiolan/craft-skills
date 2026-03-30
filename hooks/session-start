@@ -1,0 +1,25 @@
+#!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+SKILL_FILE="$PLUGIN_DIR/skills/bootstrap/SKILL.md"
+SCRIPTS_DIR="$PLUGIN_DIR/scripts"
+
+if [ -f "$SKILL_FILE" ]; then
+  CONTENT=$(cat "$SKILL_FILE")
+  CONTENT="$CONTENT
+
+## Plugin Paths
+
+craft-skills plugin directory: \`$PLUGIN_DIR\`
+craft-skills scripts directory: \`$SCRIPTS_DIR\`
+
+When dispatching support skill agents (llm-review, graph-explore), read their dispatch prompt from:
+  \`$PLUGIN_DIR/skills/<skill-name>/dispatch-prompt.md\`
+
+When running LLM scripts directly, use:
+  \`bash $SCRIPTS_DIR/<script-name> \"task\" /project/root\`"
+  CONTENT=$(echo "$CONTENT" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
+  echo "{\"additionalContext\": $CONTENT}"
+else
+  echo "{}"
+fi

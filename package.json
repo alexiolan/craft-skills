@@ -1,0 +1,11 @@
+{
+  "name": "craft-skills",
+  "version": "1.3.0",
+  "type": "module",
+  "description": "Structured development skills for any project",
+  "scripts": {
+    "sync:check": "bash scripts/sync-check.sh",
+    "sync": "echo 'Run inside Claude Code session: /reflect evolve'",
+    "health": "echo 'Run inside Claude Code session: /reflect skills'"
+  }
+}
