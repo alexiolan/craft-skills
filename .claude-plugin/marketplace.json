@@ -5,8 +5,9 @@
       "description": "DDD-first frontend development skills for Next.js projects",
       "version": "1.0.0",
       "source": {
-        "source": "local",
-        "path": "."
+        "source": "github",
+        "owner": "alexiolan",
+        "repo": "craft-skills"
       }
     }
   ]
