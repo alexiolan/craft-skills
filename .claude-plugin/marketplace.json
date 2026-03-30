@@ -1,14 +1,23 @@
 {
+  "name": "craft-skills",
+  "owner": {
+    "name": "alexiolan"
+  },
+  "metadata": {
+    "description": "DDD-first frontend development skills for Next.js projects",
+    "version": "1.0.0"
+  },
   "plugins": [
     {
       "name": "craft-skills",
-      "description": "DDD-first frontend development skills for Next.js projects",
+      "source": "./",
+      "description": "DDD-first frontend development skills for Next.js projects. Provides brainstorming, planning, parallel agent development, browser testing, systematic debugging, and self-improvement workflows.",
       "version": "1.0.0",
-      "source": {
-        "source": "github",
-        "owner": "alexiolan",
-        "repo": "craft-skills"
-      }
+      "author": {
+        "name": "alexiolan"
+      },
+      "category": "development",
+      "keywords": ["ddd", "frontend", "nextjs", "skills", "agents"]
     }
   ]
 }
