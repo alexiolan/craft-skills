@@ -1,0 +1,7 @@
+{
+  "name": "craft-skills",
+  "version": "1.0.0",
+  "description": "DDD-first frontend development skills for Next.js projects. Provides brainstorming, planning, parallel agent development, browser testing, systematic debugging, and self-improvement workflows.",
+  "skills": "skills",
+  "hooks": "hooks/hooks.json"
+}

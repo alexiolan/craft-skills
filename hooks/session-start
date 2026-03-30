@@ -1,0 +1,11 @@
+#!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SKILL_FILE="$SCRIPT_DIR/../skills/bootstrap/SKILL.md"
+
+if [ -f "$SKILL_FILE" ]; then
+  CONTENT=$(cat "$SKILL_FILE")
+  CONTENT=$(echo "$CONTENT" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
+  echo "{\"additionalContext\": $CONTENT}"
+else
+  echo "{}"
+fi
