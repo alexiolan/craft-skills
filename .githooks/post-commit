@@ -17,8 +17,9 @@ if ! git tag -l "$TAG" | grep -q "$TAG"; then
   git tag "$TAG"
   echo "Tag created: $TAG"
 
-  # Create GitHub release if gh is available and remote exists
+  # Push tag and create GitHub release if gh is available and remote exists
   if command -v gh &> /dev/null && git remote get-url origin &> /dev/null; then
+    git push origin "$TAG" &> /dev/null && echo "Tag pushed: $TAG" || true
     COMMIT_MSG=$(git log -1 --pretty=%s)
     gh release create "$TAG" --title "$TAG" --notes "$COMMIT_MSG" &> /dev/null && echo "GitHub release created: $TAG" || true
   fi
