@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# Auto-create a git tag matching the version after each commit
+
+PACKAGE_JSON="package.json"
+
+VERSION=$(grep -o '"version": "[^"]*"' "$PACKAGE_JSON" | head -1 | grep -o '[0-9]*\.[0-9]*\.[0-9]*')
+
+if [ -z "$VERSION" ]; then
+  exit 0
+fi
+
+TAG="v$VERSION"
+
+# Only create tag if it doesn't already exist
+if ! git tag -l "$TAG" | grep -q "$TAG"; then
+  git tag "$TAG"
+  echo "Tag created: $TAG"
+fi
