@@ -77,7 +77,20 @@ Present the design in sections, scaled to complexity:
 
 Save the validated design to `.claude/plans/specs/YYYY-MM-DD-{feature}-design.md`
 
-### 1.8 Spec Self-Review
+### 1.8 UI/UX Review (conditional)
+
+**Skip this step if the project does not have the `ui-ux-pro-max` skill available.**
+
+If available, invoke the `ui-ux-pro-max` skill to review the spec's UI-related sections: component layouts, interaction patterns, step flows, form design, table design, error states, loading states, and accessibility.
+
+Provide the skill with:
+- The spec's component architecture and step-by-step UX flow
+- The project's tech stack context (e.g., DaisyUI, Tailwind, React)
+- Any design images or mockups referenced in the requirements
+
+Incorporate actionable UI/UX improvements into the spec before proceeding. Skip purely aesthetic suggestions that conflict with the project's existing design system.
+
+### 1.9 Spec Self-Review
 
 Review the spec with fresh eyes:
 1. **Placeholder scan:** Any "TBD", "TODO", incomplete sections? Fix them.
@@ -85,7 +98,24 @@ Review the spec with fresh eyes:
 3. **Scope check:** Focused enough for a single plan?
 4. **Ambiguity check:** Could any requirement be interpreted two ways? Pick one, make it explicit.
 
-### 1.9 User Reviews Spec
+### 1.10 Agent Spec Review
+
+Spawn a fresh agent (code-reviewer type, opus model) to review the spec with zero prior context. The agent has no knowledge of the brainstorming conversation, so it reviews the spec purely on its own merits against the codebase and backend contracts.
+
+Provide the agent with:
+- The spec file path
+- The project's CLAUDE.md files (parent + project-level)
+- Pointers to relevant backend contract files (if applicable)
+- A clear review mandate: backend alignment, existing codebase patterns, completeness, feasibility, file structure
+
+The agent should categorize findings as: Critical / Important / Minor / Suggestions.
+
+After receiving the review:
+1. **Triage findings** — not everything flagged is actually wrong (the reviewer lacks conversation context). Evaluate each finding against what was discussed with the user.
+2. **Fix confirmed issues** in the spec.
+3. **Ask the user** about any findings that require a product decision.
+
+### 1.11 User Reviews Spec
 
 > "Spec written to `<path>`. Please review and let me know if you want changes before we plan implementation."
 
@@ -114,7 +144,24 @@ Break into bite-sized tasks (2-5 minutes each):
 2. **Placeholder scan:** Any vague steps?
 3. **Type consistency:** Names match across tasks?
 
-### 2.4 Save and Approve Plan
+### 2.4 Agent Plan Review
+
+Spawn a fresh agent (code-reviewer type, opus model) to review the plan with zero prior context.
+
+Provide the agent with:
+- The plan file path
+- The spec file path
+- The project's CLAUDE.md files
+- A clear review mandate: spec coverage, codebase alignment (read the actual files being modified), task ordering, completeness, risk areas
+
+The agent should categorize findings as: Critical / Important / Minor / Suggestions.
+
+After receiving the review:
+1. **Triage findings** — evaluate each against conversation context and actual codebase.
+2. **Fix confirmed issues** in the plan.
+3. **Ask the user** about any findings that require a product decision.
+
+### 2.6 Save and Approve Plan
 
 Save to `.claude/plans/YYYY-MM-DD-{feature}.md`
 
