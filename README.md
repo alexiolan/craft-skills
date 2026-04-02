@@ -21,6 +21,14 @@ claude --plugin-dir /path/to/craft-skills
 
 Use `/reload-plugins` during a session to pick up changes without restarting.
 
+### Setup after cloning
+
+Configure git to use the project's hooks directory for automatic version bumping on each commit:
+
+```bash
+git config core.hooksPath .githooks
+```
+
 ## Skills
 
 ### Pipeline Skills
