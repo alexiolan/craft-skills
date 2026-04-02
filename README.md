@@ -29,6 +29,14 @@ Configure git to use the project's hooks directory for automatic version bumping
 git config core.hooksPath .githooks
 ```
 
+### Updating in consuming projects
+
+Due to a [known Claude Code bug](https://github.com/anthropics/claude-code/issues/37252), `plugin update` doesn't fetch the latest version automatically. Run this to update:
+
+```bash
+git -C ~/.claude/plugins/marketplaces/craft-skills pull --ff-only && claude plugin update craft-skills@craft-skills --scope project
+```
+
 ## Skills
 
 ### Pipeline Skills
