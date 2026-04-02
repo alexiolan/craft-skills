@@ -1,8 +1,8 @@
 # Superpowers Sync Status
 
 ## Last Sync
-- **Date:** 2026-03-30
-- **Version:** 5.0.6
+- **Date:** 2026-04-02
+- **Version:** 5.0.7
 - **Repository:** https://github.com/obra/superpowers
 
 ## Absorbed Methodology
@@ -19,6 +19,11 @@
 
 ## Changelog
 
-### 2026-03-30 — Initial absorption from v5.0.6
-- Created craft-skills package absorbing methodology from superpowers 5.0.6
+### 2026-03-30 — Initial absorption from v5.0.5
+- Created craft-skills package absorbing methodology from superpowers 5.0.5
 - Dropped: visual companion, git-worktrees, TDD, writing-skills, receiving/requesting code review, finishing-a-development-branch
+
+### 2026-04-02 — Sync to v5.0.7
+- **Adopted:** Plan header for agentic workers (architect-prompt.md), implementer status codes DONE/DONE_WITH_CONCERNS/NEEDS_CONTEXT/BLOCKED (develop SKILL.md + implementer-prompt.md)
+- **Already present:** HARD-GATE on brainstorming (craft), spec self-review (craft), user review gate (craft), instruction priority hierarchy (bootstrap), scope assessment/decomposition (craft)
+- **Skipped:** Visual companion (we use browser-test post-implementation), model selection guidance (not relevant — single model), multi-platform support (Claude Code only), TDD/code-review/writing-skills/finishing-branch (intentionally dropped)

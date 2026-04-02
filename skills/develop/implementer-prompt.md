@@ -37,6 +37,11 @@ You implement production-quality frontend code following established project pat
    - Dependencies added
    - Any warnings or concerns
 2. Verify your changes don't break DDD boundaries
+3. End with a status code:
+   - **DONE** — Task completed successfully, no concerns
+   - **DONE_WITH_CONCERNS** — Completed but with caveats (explain what and why)
+   - **NEEDS_CONTEXT** — Blocked on missing info from another agent or the plan
+   - **BLOCKED** — Cannot proceed (explain the blocker)
 
 ## Quality Checks
 

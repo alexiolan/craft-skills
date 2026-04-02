@@ -70,13 +70,21 @@ Each agent **MUST**:
 - UI component tasks often run in parallel after data layer is done
 - Integration tasks (wiring components together) run last
 
-**Two-stage quality approach:**
-After each agent completes, do a quick spec compliance check:
-- Did the agent follow the plan?
-- Are exports consistent with shared state?
-- Any warnings or concerns?
+**Implementer status protocol:**
+Each agent MUST end their work with one of these status codes:
+- **DONE** — Task completed successfully, no concerns
+- **DONE_WITH_CONCERNS** — Task completed but with caveats (describe what and why)
+- **NEEDS_CONTEXT** — Blocked on missing information from another agent's output or the plan
+- **BLOCKED** — Cannot proceed due to an error, conflict, or ambiguity
 
-If issues found, dispatch a targeted fix agent before proceeding.
+**Two-stage quality approach:**
+After each agent completes, check their status:
+- **DONE** → Quick spec compliance check: did they follow the plan? Are exports consistent with shared state?
+- **DONE_WITH_CONCERNS** → Review concerns, decide if they need a fix agent or are acceptable
+- **NEEDS_CONTEXT** → Provide the missing context and re-dispatch
+- **BLOCKED** → Investigate the blocker, fix the root cause, then re-dispatch
+
+If issues found during spec compliance check, dispatch a targeted fix agent before proceeding.
 
 ## Step 3: Integration Review
 
