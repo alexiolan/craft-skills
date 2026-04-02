@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "DDD-first frontend development skills for Next.js projects",
-    "version": "1.0.4"
+    "version": "1.0.5"
   },
   "plugins": [
     {
       "name": "craft-skills",
       "source": "./",
       "description": "DDD-first frontend development skills for Next.js projects. Provides brainstorming, planning, parallel agent development, browser testing, systematic debugging, and self-improvement workflows.",
-      "version": "1.0.4",
+      "version": "1.0.5",
       "author": {
         "name": "alexiolan"
       },
