@@ -154,3 +154,13 @@ Categorize as:
 - **Improvement** — opportunities to enhance effectiveness
 
 Wait for user approval before making changes (except auto-fix tier).
+
+## Source Repo Sync
+
+craft-skills is installed from the marketplace copy (`~/.claude/plugins/marketplaces/craft-skills/`) but the source repo lives at `~/Projects/frontend/craft-skills/`. After applying ANY changes to skill files or references:
+
+1. Copy all modified/new files from the marketplace copy to the source repo
+2. Verify with `diff -rq` that both directories are in sync
+3. Report the git status of the source repo so the user can commit when ready
+
+This ensures changes made during reflect are not lost and can be pushed to the remote.
