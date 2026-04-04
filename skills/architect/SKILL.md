@@ -37,14 +37,15 @@ Before dispatching the architect agent, gather context so the agent doesn't need
 
 **First — Graph (if code-review-graph available):** Run `build_or_update_graph_tool`, then `semantic_search_nodes_tool` with feature-related keywords. This identifies which domains, files, and patterns are relevant — takes seconds, costs zero tokens.
 
-**Then — LLM agent (MANDATORY check):** Run `bash <craft-scripts>/llm-agent.sh ""` — output is `LLM_AVAILABLE` or `LLM_UNAVAILABLE`.
+**Then — LLM agent (MANDATORY):** Check availability: `curl -s --max-time 2 ${LLM_URL:-http://127.0.0.1:1234} > /dev/null 2>&1 && echo "LLM_AVAILABLE" || echo "LLM_UNAVAILABLE"`
 
 If available, dispatch with **specific paths from graph results** (not a broad "explore" prompt):
 ```
-bash <craft-scripts>/llm-agent.sh "Investigate [2-3 specific domain paths or files from graph results] for a [feature] feature. Check: 1) Existing types, services, and components 2) Patterns and conventions used 3) API endpoints if they exist. Give a structured summary." <project-root>
+CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
+bash "$CRAFT_SCRIPTS/llm-agent.sh" "Investigate [2-3 specific domain paths or files from graph results] for a [feature] feature. Check: 1) Existing types, services, and components 2) Patterns and conventions used 3) API endpoints if they exist. Give a structured summary." <project-root>
 ```
 
-> **Path resolution:** `<craft-scripts>` is the craft-skills scripts directory from bootstrap context. If not in context: `find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1`
+If the scripts path was provided at session start (bootstrap context), use that instead of the `find` command.
 
 **Scoping rule:** Never ask the agent to "explore the whole codebase." Always scope to specific directories or files from graph results. Broad prompts cause max-iteration failures.
 

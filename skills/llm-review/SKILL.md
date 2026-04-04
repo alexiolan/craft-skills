@@ -20,13 +20,15 @@ The user input is: `$ARGUMENTS`
 - Model `qwen/qwen3.5-35b-a3b` downloaded in LM Studio
 - Scripts are in the craft-skills plugin directory — the full path is provided at session start (bootstrap context). If not in context, locate it: `find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1`
 
-All script references below use `<craft-scripts>` as a placeholder for this path.
+Locate scripts: `CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)` — or use the path from bootstrap context if available. All script references below use `$CRAFT_SCRIPTS` as the path prefix.
 
 ## Process
 
-### Step 1: Load Model
+### Step 1: Check Availability
 
-Run `bash <craft-scripts>/llm-check.sh`. If `LLM_UNAVAILABLE`, inform the user:
+Check LM Studio is running: `curl -s --max-time 2 ${LLM_URL:-http://127.0.0.1:1234} > /dev/null 2>&1 && echo "LLM_AVAILABLE" || echo "LLM_UNAVAILABLE"`
+
+If `LLM_UNAVAILABLE`, inform the user:
 > "Local LLM is not available. Make sure LM Studio is running with the local server started."
 
 If `LLM_AVAILABLE`, proceed.
@@ -37,17 +39,17 @@ Choose the right script for the task:
 
 **Single file review** (file content passed to LLM):
 ```
-bash <craft-scripts>/llm-review.sh <file-path> "<focus>"
+bash $CRAFT_SCRIPTS/llm-review.sh <file-path> "<focus>"
 ```
 
 **Multiple files analyzed together** (all content passed to LLM):
 ```
-bash <craft-scripts>/llm-analyze.sh "<task>" <file1> <file2> ...
+bash $CRAFT_SCRIPTS/llm-analyze.sh "<task>" <file1> <file2> ...
 ```
 
 **Autonomous investigation** (LLM reads files itself — Claude saves the most tokens):
 ```
-bash <craft-scripts>/llm-agent.sh "<task description>" <working-directory>
+bash $CRAFT_SCRIPTS/llm-agent.sh "<task description>" <working-directory>
 ```
 The agent has `read_file`, `list_dir`, and `search_code` tools. It autonomously explores the codebase and returns findings. Use this when the task requires investigating multiple files or when you don't know which files to look at.
 
@@ -62,7 +64,7 @@ Present the LLM's findings to the user or to the calling skill. Note that local 
 
 ### Step 4: Unload Model
 
-Run `bash <craft-scripts>/llm-unload.sh` to free RAM.
+Run `bash $CRAFT_SCRIPTS/llm-unload.sh` to free RAM.
 
 **Skip unloading if** another LLM step is expected soon (e.g., this was a spec review and plan review is coming next). In that case, leave the model loaded and unload after the last LLM step.
 

@@ -115,14 +115,15 @@ Before running verification, use graph + LLM to review created/modified files fr
 - **code-review-graph (if available):** Run `build_or_update_graph_tool`, then use `get_impact_radius_tool` or `get_review_context_tool` on the changed files to get high-risk files. **Do NOT use `get_architecture_overview_tool` or `list_communities_tool`** — both overflow context.
 - **If graph not available:** Use the files listed in `.shared-state.md` under "Created / Modified Files", prioritizing integration and feature files.
 
-**Step B — LLM reviews the files (MANDATORY check):** Run `bash <craft-scripts>/llm-agent.sh ""` to check availability.
+**Step B — LLM reviews the files (MANDATORY):** Check availability: `curl -s --max-time 2 ${LLM_URL:-http://127.0.0.1:1234} > /dev/null 2>&1 && echo "LLM_AVAILABLE" || echo "LLM_UNAVAILABLE"`
 
 If available, dispatch the review:
 ```
-bash <craft-scripts>/llm-agent.sh "Review these files for bugs, missing imports, type mismatches, and pattern violations: [file list from Step A]. Also check for DDD boundary violations (cross-domain imports)." <project-root>
+CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
+bash "$CRAFT_SCRIPTS/llm-agent.sh" "Review these files for bugs, missing imports, type mismatches, and pattern violations: [file list from Step A]. Also check for DDD boundary violations (cross-domain imports)." <project-root>
 ```
 
-> **Path resolution:** `<craft-scripts>` is the craft-skills scripts directory from bootstrap context. If not in context: `find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1`
+If the scripts path was provided at session start (bootstrap context), use that instead of the `find` command.
 
 The agent reads the files autonomously — Claude receives only the findings without reading the files itself. **Do not read the implementation files yourself** — triage the LLM's findings and only read a file if you need to verify a specific finding.
 

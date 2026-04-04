@@ -59,25 +59,28 @@ Then run targeted queries:
 
 **Do NOT use `get_architecture_overview_tool`, `list_communities_tool`, or `detect_changes_tool`** — all three can return 90-300K+ chars on large projects, overflowing context. Use targeted queries instead.
 
-**Layer 2 — LLM agent (MANDATORY check, background):** You MUST check LLM availability before proceeding to Layer 3. Run: `bash <craft-scripts>/llm-agent.sh ""` — output is either `LLM_AVAILABLE` or `LLM_UNAVAILABLE`.
+**Layer 2 — LLM agent (MANDATORY):** Check LLM availability: `curl -s --max-time 2 ${LLM_URL:-http://127.0.0.1:1234} > /dev/null 2>&1 && echo "LLM_AVAILABLE" || echo "LLM_UNAVAILABLE"`
 
-If available, dispatch a **focused** task in the **background** immediately — do not defer this:
+If available, locate the scripts and dispatch a **focused** task in the **background** immediately:
 
 ```
-bash <craft-scripts>/llm-agent.sh "Investigate [2-3 specific domain paths from graph results] for a [feature] feature. Check: 1) What types/services exist in these domains 2) How forms and validation are set up 3) Any related API endpoints. Give a structured summary." <project-root>
+CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
+bash "$CRAFT_SCRIPTS/llm-agent.sh" "Investigate [2-3 specific domain paths from graph results] for a [feature] feature. Check: 1) What types/services exist in these domains 2) How forms and validation are set up 3) Any related API endpoints. Give a structured summary." <project-root>
 ```
 
-> **Path resolution:** `<craft-scripts>` is the craft-skills scripts directory provided at session start (bootstrap context). If not in context, locate it: `find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1`
+If the scripts path was provided at session start (bootstrap context), use that instead of the `find` command.
 
 **Scoping rule:** Never ask the agent to "explore the whole project." Always give it specific directories or files from graph results. Broad prompts cause the agent to hit max iterations and waste time.
 
-**Layer 3 — Claude reads (minimal):** While LLM processes in background, Claude reads ONLY:
+<HARD-GATE>
+**Layer 3 — Claude reads ONLY these while LLM processes in background:**
 - The project's CLAUDE.md (both parent and project-level)
 - Recent git commits for context (`git log --oneline -10`)
 
-**DO NOT** dispatch explore agents, read domain source files, or run Grep/Glob searches while waiting for the LLM agent. When it finishes, use its summary as the exploration base. Do not skip ahead to 1.2 until the LLM agent has either completed or been confirmed unavailable.
+**DO NOT read source files, DO NOT dispatch explore agents, DO NOT run Grep/Glob on source code.** The LLM agent reads the code — Claude's job is to WAIT for its findings and then interpret them. Any source file reading before the LLM completes defeats the purpose and wastes tokens. Do not skip ahead to 1.2 until the LLM agent has either completed or been confirmed unavailable.
+</HARD-GATE>
 
-**Fallback — if LLM is unavailable or fails:** Use graph query results + targeted file reads on the specific files the graph identified. If graph is also unavailable, dispatch **sonnet** agents for exploration.
+**Fallback — if LLM is unavailable:** Use graph query results + targeted file reads on the specific files the graph identified. If graph is also unavailable, dispatch **sonnet** agents for exploration.
 
 ### 1.2 Scope Assessment
 
