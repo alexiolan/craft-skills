@@ -48,34 +48,33 @@ The user input is: `$ARGUMENTS`
 
 Use the **graph → LLM → manual** priority for exploration. Each layer builds on the previous — don't skip ahead.
 
-**Layer 1 — Graph (instant, zero tokens):** If `code-review-graph` MCP is available:
+**Layer 1 — Graph agent (zero main-context tokens):** Dispatch a **haiku** agent with `craft-skills:graph-explore` in the **background**:
 
-First, ensure the graph is fresh — run `build_or_update_graph_tool` (incremental, fast if already up-to-date). A stale or empty graph returns zero results and wastes a layer.
+Task: `explore "<feature keywords>" <project-root>`
 
-Then run targeted queries:
-- `semantic_search_nodes_tool` with feature-related keywords (e.g., "referral", "invite", "email") — finds existing code related to the feature
-- `query_graph_tool` with `file_summary` on suspect domain dirs — maps existing structure
-- `query_graph_tool` with `imports_of`/`importers_of` on specific files — shows dependencies
+The agent handles graph freshness, embedding setup (one-time), semantic search with multiple keyword variations, file summaries, and dependency tracing. It returns a structured summary — Claude never calls graph tools directly.
 
-**Do NOT use `get_architecture_overview_tool`, `list_communities_tool`, or `detect_changes_tool`** — all three can return 90-300K+ chars on large projects, overflowing context. Use targeted queries instead.
+If the agent returns `GRAPH_UNAVAILABLE`, skip to Layer 2.
 
-**Layer 2 — LLM (MANDATORY):** Dispatch a **haiku** agent with `craft-skills:llm-review` in the **background**:
+**Layer 2 — LLM agent (MANDATORY):** Dispatch a **haiku** agent with `craft-skills:llm-review` in the **background** (parallel with Layer 1 if graph is available):
 
-Task: `explore "Investigate [2-3 specific domain paths from graph results] for a [feature] feature. Check: 1) What types/services exist in these domains 2) How forms and validation are set up 3) Any related API endpoints. Give a structured summary." <project-root>`
+Task: `explore "Investigate [2-3 domain paths relevant to the feature] for a [feature] feature. Check: 1) What types/services exist in these domains 2) How forms and validation are set up 3) Any related API endpoints. Give a structured summary." <project-root>`
+
+If graph agent results are not yet available, use the feature description to guess likely domain paths. If graph results arrived first, use them to scope the LLM agent precisely.
 
 The agent handles the full lifecycle (availability, loading, execution, unloading). Pass `keep_loaded` — more LLM steps follow in this pipeline (spec review 1.10, plan review 2.4). If LLM is unavailable, the agent returns `LLM_UNAVAILABLE` — use the fallback below.
 
-**Scoping rule:** Never ask to "explore the whole project." Always scope to specific directories or files from graph results. Broad prompts cause max-iteration failures.
+**Scoping rule:** Never ask to "explore the whole project." Always scope to specific directories or files. Broad prompts cause max-iteration failures.
 
 <HARD-GATE>
-**Layer 3 — Claude reads ONLY these while LLM processes in background:**
+**Layer 3 — Claude reads ONLY these while agents process in background:**
 - The project's CLAUDE.md (both parent and project-level)
 - Recent git commits for context (`git log --oneline -10`)
 
-**DO NOT read source files, DO NOT dispatch explore agents, DO NOT run Grep/Glob on source code.** The LLM agent reads the code — Claude's job is to WAIT for its findings and then interpret them. Any source file reading before the LLM completes defeats the purpose and wastes tokens. Do not skip ahead to 1.2 until the LLM agent has either completed or been confirmed unavailable.
+**DO NOT read source files, DO NOT dispatch explore agents, DO NOT run Grep/Glob on source code.** The graph and LLM agents read the code — Claude's job is to WAIT for their findings and then interpret them. Any source file reading before agents complete defeats the purpose and wastes tokens. Do not skip ahead to 1.2 until both agents have completed or been confirmed unavailable.
 </HARD-GATE>
 
-**Fallback — if LLM is unavailable:** Use graph query results + targeted file reads on the specific files the graph identified. If graph is also unavailable, dispatch **sonnet** agents for exploration.
+**Fallback — if both agents are unavailable:** Dispatch **sonnet** agents for exploration.
 
 ### 1.2 Scope Assessment
 
@@ -202,7 +201,10 @@ The agent should categorize findings as: Critical / Important / Minor / Suggesti
 
 **Why sonnet:** The plan is a structured breakdown of an already-reviewed spec. The review checks coverage and ordering — systematic work that doesn't require opus-level reasoning.
 
-**Parallel local LLM review:** Dispatch a **haiku** agent with `craft-skills:llm-review` **in parallel** with the sonnet agent. Task: `review <plan-file-path> "spec coverage, task ordering, completeness, risk areas"`. Free supplementary review — does not block the pipeline.
+**Parallel supplementary reviews:** Dispatch these **in parallel** with the sonnet agent:
+
+- **LLM review:** Dispatch a **haiku** agent with `craft-skills:llm-review`. Task: `review <plan-file-path> "spec coverage, task ordering, completeness, risk areas"`.
+- **Graph impact check:** Dispatch a **haiku** agent with `craft-skills:graph-explore`. Task: `impact "<list of files being modified from the plan>"`. Catches unintended side effects from modifying shared files.
 
 After receiving the review(s):
 1. **Triage findings** — evaluate each against conversation context and actual codebase.

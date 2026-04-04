@@ -111,13 +111,19 @@ If issues found, dispatch targeted fixes to frontend-developer agents. Repeat un
 
 Before running verification, use graph + LLM to review created/modified files from `.shared-state.md`. Claude should NOT read the implementation files itself — let LLM do the reading.
 
-**Step A — Identify what to review:**
-- **code-review-graph (if available):** Run `build_or_update_graph_tool`, then use `get_impact_radius_tool` or `get_review_context_tool` on the changed files to get high-risk files. **Do NOT use `get_architecture_overview_tool`, `list_communities_tool`, or `detect_changes_tool`** — all three overflow context (90-300K chars).
-- **If graph not available:** Use the files listed in `.shared-state.md` under "Created / Modified Files", prioritizing integration and feature files.
+Dispatch both agents in **parallel** — graph for structural analysis, LLM for deep file review:
 
-**Step B — LLM reviews the files (MANDATORY):** Dispatch a **haiku** agent with `craft-skills:llm-review`.
+**Step A — Graph review context:** Dispatch a **haiku** agent with `craft-skills:graph-explore`:
 
-Task: `explore "Review these files for bugs, missing imports, type mismatches, pattern violations, and DDD boundary violations: [file list from Step A]." <project-root>`
+Task: `review`
+
+The agent auto-detects changed files from git, runs impact radius analysis, and returns high-risk files with review guidance. Claude never calls graph tools directly.
+
+If the agent returns `GRAPH_UNAVAILABLE`, use the files listed in `.shared-state.md` under "Created / Modified Files" to scope the LLM review.
+
+**Step B — LLM reviews the files (MANDATORY):** Dispatch a **haiku** agent with `craft-skills:llm-review` (parallel with Step A):
+
+Task: `explore "Review these files for bugs, missing imports, type mismatches, pattern violations, and DDD boundary violations: [file list from .shared-state.md or graph agent results]." <project-root>`
 
 The agent handles the full lifecycle. Claude receives only the findings — **do not read the implementation files yourself**. Only read a file if you need to verify a specific LLM finding.
 

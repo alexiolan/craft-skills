@@ -33,19 +33,23 @@ The user input is: `$ARGUMENTS`
 
 ### Step 0: Pre-Exploration (save architect tokens)
 
-Before dispatching the architect agent, gather context so the agent doesn't need to read files itself. Follow the **graph → LLM** order — graph scopes what the LLM investigates.
+Before dispatching the architect agent, gather context so the agent doesn't need to read files itself. Dispatch both agents in **parallel** — graph for structure, LLM for deep file reading.
 
-**First — Graph (if code-review-graph available):** Run `build_or_update_graph_tool`, then `semantic_search_nodes_tool` with feature-related keywords. This identifies which domains, files, and patterns are relevant — takes seconds, costs zero tokens.
+**Graph agent:** Dispatch a **haiku** agent with `craft-skills:graph-explore`:
 
-**Then — LLM (MANDATORY):** Dispatch a **haiku** agent with `craft-skills:llm-review`.
+Task: `explore "<feature keywords>" <project-root>`
 
-Task: `explore "Investigate [2-3 specific domain paths or files from graph results] for a [feature] feature. Check: 1) Existing types, services, and components 2) Patterns and conventions used 3) API endpoints if they exist. Give a structured summary." <project-root>`
+The agent handles graph freshness, embeddings, semantic search, and dependency tracing. Returns a structured summary — Claude never calls graph tools directly. If it returns `GRAPH_UNAVAILABLE`, skip.
+
+**LLM agent (MANDATORY):** Dispatch a **haiku** agent with `craft-skills:llm-review` (parallel with graph agent):
+
+Task: `explore "Investigate [2-3 domain paths relevant to the feature] for a [feature] feature. Check: 1) Existing types, services, and components 2) Patterns and conventions used 3) API endpoints if they exist. Give a structured summary." <project-root>`
 
 The agent handles the full lifecycle (availability, loading, execution, unloading). When invoked standalone, let the agent unload. When invoked as part of a larger pipeline (e.g., craft), the calling skill controls `keep_loaded`.
 
-**Scoping rule:** Never ask the agent to "explore the whole codebase." Always scope to specific directories or files from graph results. Broad prompts cause max-iteration failures.
+**Scoping rule:** Never ask the LLM agent to "explore the whole codebase." Always scope to specific directories or files. Broad prompts cause max-iteration failures.
 
-Wait for the LLM agent to complete. Pass its findings + graph results to the architect agent in Step 1 — this saves thousands of tokens by preventing the agent from re-reading the same files.
+Wait for both agents to complete. Pass their findings to the architect agent in Step 1.
 
 ### Step 1: Dispatch Architect Agent
 
@@ -54,7 +58,7 @@ Dispatch an **implementation-architect** agent (**opus model**) using the Agent 
 **Include in the agent prompt:**
 - The requirements
 - LLM agent findings from Step 0 (if available) — prefix with "Codebase exploration summary (from a prior investigation, trust but verify specific claims):"
-- Graph query results from Step 0 (if available)
+- Graph agent findings from Step 0 (if available) — prefix with "Graph exploration summary (structural analysis — domains, files, dependencies):"
 
 The agent should:
 1. Read the project's CLAUDE.md thoroughly
