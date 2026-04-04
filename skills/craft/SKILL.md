@@ -50,16 +50,18 @@ Use the **graph → LLM → manual** priority for exploration. Each layer builds
 
 **Layer 1 — Graph (instant, zero tokens):** If `code-review-graph` MCP is available:
 
-First, ensure the graph is fresh — run `detect_changes_tool`. If it reports changed files, run `build_or_update_graph_tool` to update the graph before querying. A stale or empty graph returns zero results and wastes a layer.
+First, ensure the graph is fresh — run `build_or_update_graph_tool` (incremental, fast if already up-to-date). A stale or empty graph returns zero results and wastes a layer.
 
 Then run targeted queries:
 - `semantic_search_nodes_tool` with feature-related keywords (e.g., "referral", "invite", "email") — finds existing code related to the feature
 - `query_graph_tool` with `file_summary` on suspect domain dirs — maps existing structure
 - `query_graph_tool` with `imports_of`/`importers_of` on specific files — shows dependencies
 
-**Do NOT use `get_architecture_overview_tool` or `list_communities_tool`** — both return the entire graph and can exceed 150-300K chars on large projects, overflowing context. Use targeted queries instead.
+**Do NOT use `get_architecture_overview_tool`, `list_communities_tool`, or `detect_changes_tool`** — all three can return 90-300K+ chars on large projects, overflowing context. Use targeted queries instead.
 
-**Layer 2 — LLM agent (background, saves tokens):** Check availability: `bash <craft-scripts>/llm-agent.sh "" 2>/dev/null` — if NOT `LLM_UNAVAILABLE`, run a **focused** task in the **background**:
+**Layer 2 — LLM agent (MANDATORY check, background):** You MUST check LLM availability before proceeding to Layer 3. Run: `bash <craft-scripts>/llm-agent.sh ""` — output is either `LLM_AVAILABLE` or `LLM_UNAVAILABLE`.
+
+If available, dispatch a **focused** task in the **background** immediately — do not defer this:
 
 ```
 bash <craft-scripts>/llm-agent.sh "Investigate [2-3 specific domain paths from graph results] for a [feature] feature. Check: 1) What types/services exist in these domains 2) How forms and validation are set up 3) Any related API endpoints. Give a structured summary." <project-root>
@@ -69,11 +71,11 @@ bash <craft-scripts>/llm-agent.sh "Investigate [2-3 specific domain paths from g
 
 **Scoping rule:** Never ask the agent to "explore the whole project." Always give it specific directories or files from graph results. Broad prompts cause the agent to hit max iterations and waste time.
 
-**Layer 3 — Claude reads (minimal):** While graph queries run and LLM processes in background, Claude reads ONLY:
+**Layer 3 — Claude reads (minimal):** While LLM processes in background, Claude reads ONLY:
 - The project's CLAUDE.md (both parent and project-level)
 - Recent git commits for context (`git log --oneline -10`)
 
-**DO NOT** dispatch explore agents, read domain source files, or run Grep/Glob searches while waiting for the LLM agent. When it finishes, use its summary as the exploration base.
+**DO NOT** dispatch explore agents, read domain source files, or run Grep/Glob searches while waiting for the LLM agent. When it finishes, use its summary as the exploration base. Do not skip ahead to 1.2 until the LLM agent has either completed or been confirmed unavailable.
 
 **Fallback — if LLM is unavailable or fails:** Use graph query results + targeted file reads on the specific files the graph identified. If graph is also unavailable, dispatch **sonnet** agents for exploration.
 

@@ -14,14 +14,15 @@ MODEL="${LLM_MODEL:-qwen/qwen3.5-35b-a3b}"
 URL="${LLM_URL:-http://127.0.0.1:1234}"
 LMS="${HOME}/.lmstudio/bin/lms"
 
-if [ -z "$TASK" ]; then
-  echo "Usage: llm-agent.sh \"<task description>\" [working_dir]" >&2
-  exit 1
-fi
-
 # Check server
 if ! curl -s --max-time 2 "$URL" > /dev/null 2>&1; then
   echo "LLM_UNAVAILABLE"
+  exit 0
+fi
+
+# Empty task = availability check only
+if [ -z "$TASK" ]; then
+  echo "LLM_AVAILABLE"
   exit 0
 fi
 

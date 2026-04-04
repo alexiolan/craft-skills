@@ -26,7 +26,7 @@ git diff --staged --name-only
 
 Use the **graph → LLM → manual** priority to minimize token usage:
 
-**Graph (if code-review-graph available):** First run `detect_changes_tool` — if stale, run `build_or_update_graph_tool`. Then:
+**Graph (if code-review-graph available):** First run `build_or_update_graph_tool` (incremental, fast if current). Then:
 - `get_impact_radius_tool` on each changed file — shows blast radius and downstream consumers
 - `query_graph_tool` with `imports_of` on changed files — reveals DDD boundary violations instantly
 - `query_graph_tool` with `importers_of` on changed files — shows what depends on the changed code

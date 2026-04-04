@@ -37,7 +37,7 @@ Before touching any code:
 
 Use the **graph → LLM → manual** priority:
 
-**Step 1 — Graph maps the territory (if code-review-graph available):** First, ensure the graph is fresh — run `detect_changes_tool`. If it reports changed files, run `build_or_update_graph_tool` before querying. Then use `get_impact_radius_tool` or `query_graph_tool` with `callers_of`/`callees_of`/`imports_of` on the suspect file. This instantly returns the full dependency chain — all callers, callees, and impacted files — without reading a single file. **Avoid `get_architecture_overview_tool` and `list_communities_tool`** — both can overflow context (150-300K chars). Use targeted queries only.
+**Step 1 — Graph maps the territory (if code-review-graph available):** First, ensure the graph is fresh — run `build_or_update_graph_tool` (incremental, fast if already current). Then use `get_impact_radius_tool` or `query_graph_tool` with `callers_of`/`callees_of`/`imports_of` on the suspect file. This instantly returns the full dependency chain — all callers, callees, and impacted files — without reading a single file. **Avoid `get_architecture_overview_tool` and `list_communities_tool`** — both can overflow context (150-300K chars). Use targeted queries only.
 
 **Step 2 — Agent reads the code (if LLM available):** Pass the **specific** key files from the graph's output to the LLM agent:
 ```
