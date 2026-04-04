@@ -26,16 +26,18 @@ git diff --staged --name-only
 
 Use the **graph → LLM → manual** priority to minimize token usage:
 
-**Graph (if code-review-graph available):**
+**Graph (if code-review-graph available):** First run `detect_changes_tool` — if stale, run `build_or_update_graph_tool`. Then:
 - `get_impact_radius_tool` on each changed file — shows blast radius and downstream consumers
 - `query_graph_tool` with `imports_of` on changed files — reveals DDD boundary violations instantly
 - `query_graph_tool` with `importers_of` on changed files — shows what depends on the changed code
-- **Do NOT use `get_architecture_overview_tool`** — too large for review context
+- **Do NOT use `get_architecture_overview_tool` or `list_communities_tool`** — both can overflow context (150-300K chars)
 
 **LLM agent (if available, run in background):**
 ```
-bash scripts/llm-agent.sh "Review these changed files for: 1) Reuse opportunities vs src/domain/shared/ 2) DDD boundary violations (cross-domain imports) 3) Unnecessary complexity. Files: [list from git diff]" <project-root>
+bash <craft-scripts>/llm-agent.sh "Review these changed files for: 1) Reuse opportunities vs src/domain/shared/ 2) DDD boundary violations (cross-domain imports) 3) Unnecessary complexity. Files: [list from git diff]" <project-root>
 ```
+
+> **Path resolution:** `<craft-scripts>` is the craft-skills scripts directory from bootstrap context. If not in context: `find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1`
 
 **Then read only** the files the graph or LLM flagged as having issues — don't read every changed file upfront.
 

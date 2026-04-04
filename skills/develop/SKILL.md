@@ -112,14 +112,16 @@ If issues found, dispatch targeted fixes to frontend-developer agents. Repeat un
 Before running verification, use available review tools on created/modified files from `.shared-state.md`:
 
 **Step A — Identify what to review:**
-- **code-review-graph (if available):** Use `get_impact_radius_tool` or `get_review_context_tool` on the changed files to get the list of high-risk files impacted by the changes. **Do NOT use `get_architecture_overview_tool`** — it can return 300K+ chars on large projects and will overflow context.
+- **code-review-graph (if available):** First run `detect_changes_tool` — if stale, run `build_or_update_graph_tool`. Then use `get_impact_radius_tool` or `get_review_context_tool` on the changed files to get the list of high-risk files impacted by the changes. **Do NOT use `get_architecture_overview_tool` or `list_communities_tool`** — both can return 150-300K+ chars on large projects and will overflow context.
 - **If graph not available:** Use the files listed in `.shared-state.md` under "Created / Modified Files", prioritizing integration and feature files.
 
 **Step B — Review those files (if local LLM available):**
 Run `llm-agent.sh` with the file list from Step A:
 ```
-bash scripts/llm-agent.sh "Review these files for bugs, missing imports, type mismatches, and pattern violations: [file list from Step A]" <project-root>
+bash <craft-scripts>/llm-agent.sh "Review these files for bugs, missing imports, type mismatches, and pattern violations: [file list from Step A]" <project-root>
 ```
+
+> **Path resolution:** `<craft-scripts>` is the craft-skills scripts directory from bootstrap context. If not in context: `find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1`
 The agent reads the files autonomously — Claude receives only the findings without reading the files itself.
 
 **Step C — Act on findings:**

@@ -48,18 +48,24 @@ The user input is: `$ARGUMENTS`
 
 Use the **graph → LLM → manual** priority for exploration. Each layer builds on the previous — don't skip ahead.
 
-**Layer 1 — Graph (instant, zero tokens):** If `code-review-graph` MCP is available, run these targeted queries:
+**Layer 1 — Graph (instant, zero tokens):** If `code-review-graph` MCP is available:
+
+First, ensure the graph is fresh — run `detect_changes_tool`. If it reports changed files, run `build_or_update_graph_tool` to update the graph before querying. A stale or empty graph returns zero results and wastes a layer.
+
+Then run targeted queries:
 - `semantic_search_nodes_tool` with feature-related keywords (e.g., "referral", "invite", "email") — finds existing code related to the feature
 - `query_graph_tool` with `file_summary` on suspect domain dirs — maps existing structure
-- `list_communities_tool` — shows domain clusters and their relationships
+- `query_graph_tool` with `imports_of`/`importers_of` on specific files — shows dependencies
 
-**Do NOT use `get_architecture_overview_tool`** — it returns the entire graph (can exceed 300K chars on large projects). Use targeted queries instead.
+**Do NOT use `get_architecture_overview_tool` or `list_communities_tool`** — both return the entire graph and can exceed 150-300K chars on large projects, overflowing context. Use targeted queries instead.
 
-**Layer 2 — LLM agent (background, saves tokens):** Check availability: `bash scripts/llm-agent.sh "" 2>/dev/null` — if NOT `LLM_UNAVAILABLE`, run a **focused** task in the **background**:
+**Layer 2 — LLM agent (background, saves tokens):** Check availability: `bash <craft-scripts>/llm-agent.sh "" 2>/dev/null` — if NOT `LLM_UNAVAILABLE`, run a **focused** task in the **background**:
 
 ```
-bash scripts/llm-agent.sh "Investigate [2-3 specific domain paths from graph results] for a [feature] feature. Check: 1) What types/services exist in these domains 2) How forms and validation are set up 3) Any related API endpoints. Give a structured summary." <project-root>
+bash <craft-scripts>/llm-agent.sh "Investigate [2-3 specific domain paths from graph results] for a [feature] feature. Check: 1) What types/services exist in these domains 2) How forms and validation are set up 3) Any related API endpoints. Give a structured summary." <project-root>
 ```
+
+> **Path resolution:** `<craft-scripts>` is the craft-skills scripts directory provided at session start (bootstrap context). If not in context, locate it: `find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1`
 
 **Scoping rule:** Never ask the agent to "explore the whole project." Always give it specific directories or files from graph results. Broad prompts cause the agent to hit max iterations and waste time.
 
