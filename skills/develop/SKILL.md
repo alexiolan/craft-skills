@@ -107,22 +107,26 @@ After all agents complete, review `.shared-state.md` holistically:
 
 If issues found, dispatch targeted fixes to frontend-developer agents. Repeat until consistent.
 
-## Step 3.5: Post-Develop Review (optional)
+## Step 3.5: Post-Develop Review
 
-Before running verification, use available review tools on created/modified files from `.shared-state.md`:
+Before running verification, use graph + LLM to review created/modified files from `.shared-state.md`. Claude should NOT read the implementation files itself — let LLM do the reading.
 
 **Step A — Identify what to review:**
-- **code-review-graph (if available):** First run `build_or_update_graph_tool` (incremental, fast if current). Then use `get_impact_radius_tool` or `get_review_context_tool` on the changed files to get the list of high-risk files impacted by the changes. **Do NOT use `get_architecture_overview_tool` or `list_communities_tool`** — both can return 150-300K+ chars on large projects and will overflow context.
+- **code-review-graph (if available):** Run `build_or_update_graph_tool`, then use `get_impact_radius_tool` or `get_review_context_tool` on the changed files to get high-risk files. **Do NOT use `get_architecture_overview_tool` or `list_communities_tool`** — both overflow context.
 - **If graph not available:** Use the files listed in `.shared-state.md` under "Created / Modified Files", prioritizing integration and feature files.
 
-**Step B — Review those files (if local LLM available):**
-Run `llm-agent.sh` with the file list from Step A:
+**Step B — LLM reviews the files (MANDATORY check):** Run `bash <craft-scripts>/llm-agent.sh ""` to check availability.
+
+If available, dispatch the review:
 ```
-bash <craft-scripts>/llm-agent.sh "Review these files for bugs, missing imports, type mismatches, and pattern violations: [file list from Step A]" <project-root>
+bash <craft-scripts>/llm-agent.sh "Review these files for bugs, missing imports, type mismatches, and pattern violations: [file list from Step A]. Also check for DDD boundary violations (cross-domain imports)." <project-root>
 ```
 
 > **Path resolution:** `<craft-scripts>` is the craft-skills scripts directory from bootstrap context. If not in context: `find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1`
-The agent reads the files autonomously — Claude receives only the findings without reading the files itself.
+
+The agent reads the files autonomously — Claude receives only the findings without reading the files itself. **Do not read the implementation files yourself** — triage the LLM's findings and only read a file if you need to verify a specific finding.
+
+If LLM is unavailable, fall back to having Claude read only the integration/wiring files (not every file).
 
 **Step C — Act on findings:**
 If either review surfaces issues, dispatch targeted **sonnet** fix agents before proceeding to verification.

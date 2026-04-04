@@ -24,42 +24,48 @@ git diff --staged --name-only
 
 ## Step 2: Analyze with Graph + LLM (before reading files)
 
-Use the **graph → LLM → manual** priority to minimize token usage:
+Use the **graph → LLM → manual** priority. Claude should NOT read changed files directly — let LLM do the reading.
 
-**Graph (if code-review-graph available):** First run `build_or_update_graph_tool` (incremental, fast if current). Then:
+**Graph (if code-review-graph available):** Run `build_or_update_graph_tool`, then:
 - `get_impact_radius_tool` on each changed file — shows blast radius and downstream consumers
 - `query_graph_tool` with `imports_of` on changed files — reveals DDD boundary violations instantly
 - `query_graph_tool` with `importers_of` on changed files — shows what depends on the changed code
 - **Do NOT use `get_architecture_overview_tool` or `list_communities_tool`** — both can overflow context (150-300K chars)
 
-**LLM agent (if available, run in background):**
+**LLM agent (MANDATORY check):** Run `bash <craft-scripts>/llm-agent.sh ""` to check availability.
+
+If available, dispatch with the file list from git diff **plus graph context** (which files import/depend on the changed files):
 ```
-bash <craft-scripts>/llm-agent.sh "Review these changed files for: 1) Reuse opportunities vs src/domain/shared/ 2) DDD boundary violations (cross-domain imports) 3) Unnecessary complexity. Files: [list from git diff]" <project-root>
+bash <craft-scripts>/llm-agent.sh "Review these changed files for: 1) Reuse opportunities — check if src/domain/shared/ui/, src/domain/shared/hooks/, or src/domain/forms/fields/ already has equivalent components 2) DDD boundary violations (cross-domain imports between business domains) 3) Unnecessary complexity or premature abstractions 4) Naming consistency. Changed files: [list from git diff]. Also check these related files flagged by graph: [high-risk files from get_impact_radius_tool]" <project-root>
 ```
 
 > **Path resolution:** `<craft-scripts>` is the craft-skills scripts directory from bootstrap context. If not in context: `find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1`
 
-**Then read only** the files the graph or LLM flagged as having issues — don't read every changed file upfront.
+**Wait for LLM results before proceeding to Steps 3-5.** The LLM handles the file reading — Claude's role in Steps 3-5 is to triage and verify LLM findings using graph data, not to re-read every file.
+
+If LLM is unavailable, fall back to reading only the files graph flagged as high-risk.
 
 ## Step 3: Reuse Check
 
-For each changed file, check against the project's shared inventory:
+Triage LLM findings (if available) and graph results for reuse opportunities:
 
 - **Shared components**: Is there an existing component in `src/domain/shared/ui/` that could replace custom UI?
 - **Shared hooks**: Is there an existing hook in `src/domain/shared/hooks/` that duplicates new logic?
 - **Form fields**: Are raw inputs used instead of existing fields from `src/domain/forms/fields/`?
 - **Cross-domain patterns**: Is the same utility being created in multiple domains? Should it be in shared?
 
+Only read a specific file if the LLM flagged an issue you need to verify.
+
 ## Step 4: DDD Boundary Check
 
-For each changed file in a business domain:
-- Are all imports from shared domains or the same domain? (Graph's `imports_of` results show this instantly)
+Use graph `imports_of` results and LLM findings:
+- Are all imports from shared domains or the same domain?
 - Are new types/utilities placed in the correct domain?
 - Should any new shared functionality be in `src/domain/shared/` instead?
 
 ## Step 5: Quality Review
 
-Check for:
+Based on LLM findings, check for:
 - **Unnecessary complexity**: Can this be simplified without losing functionality?
 - **Premature abstraction**: Is a helper/utility created for a one-time operation?
 - **Missing error handling at boundaries**: User input validation, API response handling

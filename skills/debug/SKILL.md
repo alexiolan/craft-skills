@@ -39,15 +39,18 @@ Use the **graph → LLM → manual** priority:
 
 **Step 1 — Graph maps the territory (if code-review-graph available):** First, ensure the graph is fresh — run `build_or_update_graph_tool` (incremental, fast if already current). Then use `get_impact_radius_tool` or `query_graph_tool` with `callers_of`/`callees_of`/`imports_of` on the suspect file. This instantly returns the full dependency chain — all callers, callees, and impacted files — without reading a single file. **Avoid `get_architecture_overview_tool` and `list_communities_tool`** — both can overflow context (150-300K chars). Use targeted queries only.
 
-**Step 2 — Agent reads the code (if LLM available):** Pass the **specific** key files from the graph's output to the LLM agent:
+**Step 2 — Agent reads the code (MANDATORY check):** Run `bash <craft-scripts>/llm-agent.sh ""` to check availability.
+
+If available, pass the **specific** key files from the graph output to the LLM agent — **do not read these files yourself**:
 ```
-bash <craft-scripts>/llm-agent.sh "Read these files and find where data breaks: [2-3 key files from graph chain]. Report the data flow." <project-root>
+bash <craft-scripts>/llm-agent.sh "Read these files and find where data breaks: [2-3 key files from graph chain]. Report the data flow and any anomalies." <project-root>
 ```
 
 > **Path resolution:** `<craft-scripts>` is the craft-skills scripts directory provided at session start. If not in context: `find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1`
+
 **Scoping rule:** Always list specific file paths — never ask the agent to "explore" or "search the whole project." Broad prompts cause max-iteration failures.
 
-Graph provides the map (which files matter), agent provides the understanding (what the code does). Together they handle complex multi-service traces that neither could do alone — graph prevents agent from wandering, agent provides code-level insight that graph can't.
+Graph provides the map (which files matter), agent provides the understanding (what the code does). Together they handle complex multi-service traces that neither could do alone — graph prevents agent from wandering, agent provides code-level insight that graph can't. **Claude's role is to interpret the findings, not to read the files.**
 
 **Fallback — if graph unavailable:** Use Grep to trace imports/exports of the suspect file manually, then pass those files to the LLM agent.
 **Fallback — if LLM unavailable:** Use graph results to identify the key 2-3 files, then read them directly.

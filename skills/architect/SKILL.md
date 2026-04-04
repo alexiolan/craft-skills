@@ -31,13 +31,37 @@ The user input is: `$ARGUMENTS`
 
 ## Process
 
+### Step 0: Pre-Exploration (save architect tokens)
+
+Before dispatching the architect agent, gather context so the agent doesn't need to read files itself. Follow the **graph → LLM** order — graph scopes what the LLM investigates.
+
+**First — Graph (if code-review-graph available):** Run `build_or_update_graph_tool`, then `semantic_search_nodes_tool` with feature-related keywords. This identifies which domains, files, and patterns are relevant — takes seconds, costs zero tokens.
+
+**Then — LLM agent (MANDATORY check):** Run `bash <craft-scripts>/llm-agent.sh ""` — output is `LLM_AVAILABLE` or `LLM_UNAVAILABLE`.
+
+If available, dispatch with **specific paths from graph results** (not a broad "explore" prompt):
+```
+bash <craft-scripts>/llm-agent.sh "Investigate [2-3 specific domain paths or files from graph results] for a [feature] feature. Check: 1) Existing types, services, and components 2) Patterns and conventions used 3) API endpoints if they exist. Give a structured summary." <project-root>
+```
+
+> **Path resolution:** `<craft-scripts>` is the craft-skills scripts directory from bootstrap context. If not in context: `find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1`
+
+**Scoping rule:** Never ask the agent to "explore the whole codebase." Always scope to specific directories or files from graph results. Broad prompts cause max-iteration failures.
+
+Wait for the LLM agent to complete. Pass its findings + graph results to the architect agent in Step 1 — this saves thousands of tokens by preventing the agent from re-reading the same files.
+
 ### Step 1: Dispatch Architect Agent
 
 Dispatch an **implementation-architect** agent (**opus model**) using the Agent tool. Read the agent prompt template from the `architect-prompt.md` file in this skill's directory, then append the requirements to it.
 
+**Include in the agent prompt:**
+- The requirements
+- LLM agent findings from Step 0 (if available) — prefix with "Codebase exploration summary (from a prior investigation, trust but verify specific claims):"
+- Graph query results from Step 0 (if available)
+
 The agent should:
 1. Read the project's CLAUDE.md thoroughly
-2. Investigate the codebase using **graph tools first** (semantic_search_nodes_tool, query_graph_tool) before falling back to Glob/Grep — see architect-prompt.md for priority
+2. Use the pre-exploration findings as a starting point — only read additional files if the findings are insufficient or need verification
 3. Check the backend API (if an additional working directory exists) for endpoint alignment
 4. Ask clarifying questions if requirements are ambiguous
 5. Create a detailed implementation plan
