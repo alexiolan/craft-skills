@@ -35,16 +35,21 @@ Before touching any code:
 
 ### 1.4 Gather Evidence at Boundaries
 
-**code-review-graph + LLM agent (optional, powerful combo):**
+Use the **graph → LLM → manual** priority:
 
-**Step 1 — Graph maps the territory:** Use `get_impact_radius_tool` or `query_graph_tool` on the suspect file. This instantly returns the full dependency chain — all callers, callees, and impacted files — without reading a single file.
+**Step 1 — Graph maps the territory (if code-review-graph available):** Use `get_impact_radius_tool` or `query_graph_tool` with `callers_of`/`callees_of`/`imports_of` on the suspect file. This instantly returns the full dependency chain — all callers, callees, and impacted files — without reading a single file. **Avoid `get_architecture_overview_tool`** — use targeted queries only.
 
-**Step 2 — Agent reads the code:** Pass the key files from the graph's output to the LLM agent:
+**Step 2 — Agent reads the code (if LLM available):** Pass the **specific** key files from the graph's output to the LLM agent:
 ```
 bash scripts/llm-agent.sh "Read these files and find where data breaks: [2-3 key files from graph chain]. Report the data flow." <project-root>
 ```
+**Scoping rule:** Always list specific file paths — never ask the agent to "explore" or "search the whole project." Broad prompts cause max-iteration failures.
 
 Graph provides the map (which files matter), agent provides the understanding (what the code does). Together they handle complex multi-service traces that neither could do alone — graph prevents agent from wandering, agent provides code-level insight that graph can't.
+
+**Fallback — if graph unavailable:** Use Grep to trace imports/exports of the suspect file manually, then pass those files to the LLM agent.
+**Fallback — if LLM unavailable:** Use graph results to identify the key 2-3 files, then read them directly.
+**Fallback — if both unavailable:** Manual trace with Grep + Read.
 
 Also check directly:
 - Check API request/response (network tab, service layer logs)

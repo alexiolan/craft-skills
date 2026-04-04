@@ -46,19 +46,30 @@ The user input is: `$ARGUMENTS`
 
 ### 1.1 Explore Context
 
-**If local LLM agent is available** (run `bash scripts/llm-agent.sh "" 2>/dev/null` — if NOT `LLM_UNAVAILABLE`), use it for initial exploration. Run in the **background** while Claude reads CLAUDE.md:
+Use the **graph → LLM → manual** priority for exploration. Each layer builds on the previous — don't skip ahead.
+
+**Layer 1 — Graph (instant, zero tokens):** If `code-review-graph` MCP is available, run these targeted queries:
+- `semantic_search_nodes_tool` with feature-related keywords (e.g., "referral", "invite", "email") — finds existing code related to the feature
+- `query_graph_tool` with `file_summary` on suspect domain dirs — maps existing structure
+- `list_communities_tool` — shows domain clusters and their relationships
+
+**Do NOT use `get_architecture_overview_tool`** — it returns the entire graph (can exceed 300K chars on large projects). Use targeted queries instead.
+
+**Layer 2 — LLM agent (background, saves tokens):** Check availability: `bash scripts/llm-agent.sh "" 2>/dev/null` — if NOT `LLM_UNAVAILABLE`, run a **focused** task in the **background**:
 
 ```
-bash scripts/llm-agent.sh "Explore this project for a feature about: [feature description]. Find: 1) Which domains exist in src/domain/ 2) What shared components/hooks are available 3) Any existing code related to this feature 4) Backend API endpoints if they exist. Give a structured summary." <project-root>
+bash scripts/llm-agent.sh "Investigate [2-3 specific domain paths from graph results] for a [feature] feature. Check: 1) What types/services exist in these domains 2) How forms and validation are set up 3) Any related API endpoints. Give a structured summary." <project-root>
 ```
 
-In parallel, Claude reads only what the agent can't provide:
-- Read the project's CLAUDE.md (both parent and project-level)
-- Review recent git commits for context
+**Scoping rule:** Never ask the agent to "explore the whole project." Always give it specific directories or files from graph results. Broad prompts cause the agent to hit max iterations and waste time.
 
-When the agent finishes, use its summary instead of reading domain files yourself. This saves thousands of tokens on exploration.
+**Layer 3 — Claude reads (minimal):** While graph queries run and LLM processes in background, Claude reads ONLY:
+- The project's CLAUDE.md (both parent and project-level)
+- Recent git commits for context (`git log --oneline -10`)
 
-**If local LLM is not available**, dispatch **sonnet** agents in parallel for all exploration tasks including domain investigation.
+**DO NOT** dispatch explore agents, read domain source files, or run Grep/Glob searches while waiting for the LLM agent. When it finishes, use its summary as the exploration base.
+
+**Fallback — if LLM is unavailable or fails:** Use graph query results + targeted file reads on the specific files the graph identified. If graph is also unavailable, dispatch **sonnet** agents for exploration.
 
 ### 1.2 Scope Assessment
 

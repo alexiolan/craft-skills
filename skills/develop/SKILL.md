@@ -112,7 +112,7 @@ If issues found, dispatch targeted fixes to frontend-developer agents. Repeat un
 Before running verification, use available review tools on created/modified files from `.shared-state.md`:
 
 **Step A — Identify what to review:**
-- **code-review-graph (if available):** Use the graph's blast-radius analysis to get the list of high-risk files impacted by the changes.
+- **code-review-graph (if available):** Use `get_impact_radius_tool` or `get_review_context_tool` on the changed files to get the list of high-risk files impacted by the changes. **Do NOT use `get_architecture_overview_tool`** — it can return 300K+ chars on large projects and will overflow context.
 - **If graph not available:** Use the files listed in `.shared-state.md` under "Created / Modified Files", prioritizing integration and feature files.
 
 **Step B — Review those files (if local LLM available):**

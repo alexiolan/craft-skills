@@ -37,7 +37,7 @@ Dispatch an **implementation-architect** agent (**opus model**) using the Agent 
 
 The agent should:
 1. Read the project's CLAUDE.md thoroughly
-2. Investigate the codebase for relevant patterns, existing code, and reusable components
+2. Investigate the codebase using **graph tools first** (semantic_search_nodes_tool, query_graph_tool) before falling back to Glob/Grep — see architect-prompt.md for priority
 3. Check the backend API (if an additional working directory exists) for endpoint alignment
 4. Ask clarifying questions if requirements are ambiguous
 5. Create a detailed implementation plan

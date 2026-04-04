@@ -28,10 +28,10 @@ When you receive feature requirements:
 6. Consider UX and performance implications
 7. **Check domain boundaries** — Will this feature need data from multiple domains? Plan the data flow through props/shared, not cross-domain imports
 
-**Explore the codebase:**
-- Use Glob to find similar existing features (e.g., `src/domain/*/feature/**/*.tsx`)
-- Use Grep to search for related patterns or components
-- Read existing domain implementations as references
+**Explore the codebase (graph → search → read):**
+- **Prefer graph tools when available** — `semantic_search_nodes_tool` to find related code by keyword, `query_graph_tool` with `imports_of`/`importers_of`/`file_summary` to understand structure, `get_impact_radius_tool` to assess change scope. These are instant and cost zero tokens. **Avoid `get_architecture_overview_tool`** — it can return 300K+ chars on large projects.
+- **Then search** — Use Glob to find similar features (e.g., `src/domain/*/feature/**/*.tsx`), Grep for related patterns
+- **Read files last** — only read files identified by graph or search, not entire domains
 - Follow the "Reuse Before Create" principle from CLAUDE.md
 
 ## Clarification Process

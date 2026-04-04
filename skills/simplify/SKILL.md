@@ -22,9 +22,24 @@ git diff --name-only
 git diff --staged --name-only
 ```
 
-Read each changed file to understand what was modified.
+## Step 2: Analyze with Graph + LLM (before reading files)
 
-## Step 2: Reuse Check
+Use the **graph → LLM → manual** priority to minimize token usage:
+
+**Graph (if code-review-graph available):**
+- `get_impact_radius_tool` on each changed file — shows blast radius and downstream consumers
+- `query_graph_tool` with `imports_of` on changed files — reveals DDD boundary violations instantly
+- `query_graph_tool` with `importers_of` on changed files — shows what depends on the changed code
+- **Do NOT use `get_architecture_overview_tool`** — too large for review context
+
+**LLM agent (if available, run in background):**
+```
+bash scripts/llm-agent.sh "Review these changed files for: 1) Reuse opportunities vs src/domain/shared/ 2) DDD boundary violations (cross-domain imports) 3) Unnecessary complexity. Files: [list from git diff]" <project-root>
+```
+
+**Then read only** the files the graph or LLM flagged as having issues — don't read every changed file upfront.
+
+## Step 3: Reuse Check
 
 For each changed file, check against the project's shared inventory:
 
@@ -33,14 +48,14 @@ For each changed file, check against the project's shared inventory:
 - **Form fields**: Are raw inputs used instead of existing fields from `src/domain/forms/fields/`?
 - **Cross-domain patterns**: Is the same utility being created in multiple domains? Should it be in shared?
 
-## Step 3: DDD Boundary Check
+## Step 4: DDD Boundary Check
 
 For each changed file in a business domain:
-- Are all imports from shared domains or the same domain?
+- Are all imports from shared domains or the same domain? (Graph's `imports_of` results show this instantly)
 - Are new types/utilities placed in the correct domain?
 - Should any new shared functionality be in `src/domain/shared/` instead?
 
-## Step 4: Quality Review
+## Step 5: Quality Review
 
 Check for:
 - **Unnecessary complexity**: Can this be simplified without losing functionality?
@@ -49,7 +64,7 @@ Check for:
 - **Excessive error handling internally**: Trust internal code, don't over-validate
 - **Consistent naming**: Do new names follow existing codebase conventions?
 
-## Step 5: Verification
+## Step 6: Verification
 
 **Iron Law: Evidence before assertions.**
 
@@ -61,7 +76,7 @@ Run the project's verification commands:
 
 Report actual output, not assumptions about output.
 
-## Step 6: Report
+## Step 7: Report
 
 Present findings with specific file:line references:
 
