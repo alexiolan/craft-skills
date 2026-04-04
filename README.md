@@ -57,6 +57,7 @@ git -C ~/.claude/plugins/marketplaces/craft-skills pull --ff-only && claude plug
 | **debug** | Systematic root-cause investigation before attempting any fix. |
 | **simplify** | Review changed code for reuse opportunities, quality, and DDD compliance. |
 | **reflect** | Self-improvement: audit project configs, maintain skill health, sync upstream, auto-dream. |
+| **llm-review** | Run a local LLM review on files. Auto-loads/unloads model. Free second opinion with thinking mode. |
 
 ### System Skills
 
@@ -116,7 +117,8 @@ craft-skills/
 │   │   └── tester-prompt.md       # Browser tester agent prompt
 │   ├── reflect/SKILL.md
 │   ├── debug/SKILL.md
-│   └── simplify/SKILL.md
+│   ├── simplify/SKILL.md
+│   └── llm-review/SKILL.md
 ├── hooks/
 │   ├── hooks.json           # SessionStart hook config
 │   └── session-start        # Bootstrap injection script
@@ -155,6 +157,51 @@ Use the new project prompt:
 
 1. Read `craft-skills/new-project-prompt.md`
 2. Paste content as input — the agent asks questions and scaffolds the configuration
+
+## Optional Integrations
+
+craft-skills detects and uses these plugins when available. Nothing breaks without them — steps are skipped automatically.
+
+### Local LLM review (via LM Studio)
+
+Free second opinion from a different model architecture (Qwen3.5-35B-A3B with thinking mode). Catches issues Claude might miss — not a token saver, but a quality booster. The `llm-review` skill auto-loads the model, runs the review, and unloads when done.
+
+**Setup:**
+
+1. Install [LM Studio](https://lmstudio.ai) and download `qwen3.5-35b-a3b` (~22GB)
+2. Start the local server in LM Studio (Local Server → Start)
+
+**Scripts included:**
+
+| Script | Purpose |
+|---|---|
+| `llm-agent.sh` | Autonomous agent with file access tools — Claude saves the most tokens |
+| `llm-review.sh` | Reviews a single file (content passed to LLM) |
+| `llm-analyze.sh` | Analyzes multiple files together |
+| `llm-check.sh` | Checks availability, auto-loads model |
+| `llm-unload.sh` | Unloads model from RAM |
+
+**Used in:** `craft` (exploration, spec review, plan review), `develop` (post-develop review), `debug` (data flow tracing). Can also be invoked directly: `/llm-review path/to/file.ts "focus area"`
+
+### Code review graph (via code-review-graph plugin)
+
+Builds a structural map of your codebase with Tree-sitter, tracks changes incrementally, and provides blast-radius analysis so Claude reads only the files that matter. Up to 8x token reduction on reviews.
+
+**Setup:**
+
+```bash
+pip install code-review-graph
+code-review-graph install
+code-review-graph build
+```
+
+**Used in:** `develop` (post-develop review — identifies high-risk files for targeted review)
+
+### UI/UX review (via ui-ux-pro-max skill)
+
+Reviews spec UI sections — component layouts, interaction patterns, form design, error states, loading states, and accessibility — before implementation begins.
+
+**Used in:** `craft` (spec review phase, step 1.8)
 
 ## Methodology
 

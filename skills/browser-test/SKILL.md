@@ -51,9 +51,11 @@ Wait for user approval. Max 4-5 parallel agents.
 
 ## Step 3: Dispatch Parallel Test Agents
 
-Dispatch each batch as a separate agent. Read the agent prompt template from the `tester-prompt.md` file in this skill's directory and provide it as context along with the batch's specific scenarios.
+Dispatch each batch as a separate agent (**haiku model**). Read the agent prompt template from the `tester-prompt.md` file in this skill's directory and provide it as context along with the batch's specific scenarios.
 
 Launch all batches in parallel using the Agent tool.
+
+**Why haiku:** Browser test agents perform simple, mechanical work — navigate to URL, click elements, verify text content. This doesn't require deep reasoning, and haiku's speed means faster test cycles.
 
 ## Step 4: Collect Results
 

@@ -9,6 +9,20 @@ The full design-first development pipeline. Collaborative design exploration wit
 
 **Pipeline:** Brainstorm → Plan → Develop → Browser Test → Report
 
+## Model Selection Strategy
+
+This pipeline uses a three-tier model strategy to optimize speed, cost, and quality:
+
+| Tier | Model | Used For | Why |
+|---|---|---|---|
+| **Premium** | opus | Brainstorming (main conversation), spec writing, spec review agent, integration tasks | Deep reasoning, creative exploration, critical analysis |
+| **Balanced** | sonnet | Context exploration agents, plan review agent, data layer + UI implementation agents | Good balance — doesn't need opus-level reasoning |
+| **Fast** | haiku | Browser test agents | Fast and cheap — UI clicks and text verification |
+
+**Optional integrations:** The pipeline can leverage `craft-skills:llm-review` (local LLM) for supplementary reviews and `code-review-graph` for targeted file selection. See each skill/plugin for setup.
+
+When dispatching Claude agents, always specify the `model` parameter explicitly. The main conversation model is controlled by the user — these guidelines apply only to dispatched agents.
+
 <HARD-GATE>
 Do NOT write any implementation code, scaffold any project, or take any implementation action until you have presented a design and the user has approved it. This applies to EVERY feature regardless of perceived simplicity.
 </HARD-GATE>
@@ -32,10 +46,19 @@ The user input is: `$ARGUMENTS`
 
 ### 1.1 Explore Context
 
+**If local LLM agent is available** (run `bash scripts/llm-agent.sh "" 2>/dev/null` — if NOT `LLM_UNAVAILABLE`), use it for initial exploration. Run in the **background** while Claude reads CLAUDE.md:
+
+```
+bash scripts/llm-agent.sh "Explore this project for a feature about: [feature description]. Find: 1) Which domains exist in src/domain/ 2) What shared components/hooks are available 3) Any existing code related to this feature 4) Backend API endpoints if they exist. Give a structured summary." <project-root>
+```
+
+In parallel, Claude reads only what the agent can't provide:
 - Read the project's CLAUDE.md (both parent and project-level)
-- Check `src/domain/` to understand existing domains
 - Review recent git commits for context
-- Check backend API (additional working directory) if the feature involves API integration
+
+When the agent finishes, use its summary instead of reading domain files yourself. This saves thousands of tokens on exploration.
+
+**If local LLM is not available**, dispatch **sonnet** agents in parallel for all exploration tasks including domain investigation.
 
 ### 1.2 Scope Assessment
 
@@ -45,7 +68,7 @@ Before detailed questions, assess scope:
 
 ### 1.3 DDD-Specific Analysis
 
-Before asking user questions, investigate:
+Before asking user questions, investigate (use the agent's exploration results if available):
 - **Which domain(s)?** Where does this feature belong?
 - **Cross-domain implications?** Will this need shared hooks or types?
 - **Existing components?** What can be reused from `src/domain/shared/` and `src/domain/forms/fields/`?
@@ -100,7 +123,7 @@ Review the spec with fresh eyes:
 
 ### 1.10 Agent Spec Review
 
-Spawn a fresh agent (code-reviewer type, opus model) to review the spec with zero prior context. The agent has no knowledge of the brainstorming conversation, so it reviews the spec purely on its own merits against the codebase and backend contracts.
+Spawn a fresh agent (**code-reviewer type, opus model**) to review the spec with zero prior context. The agent has no knowledge of the brainstorming conversation, so it reviews the spec purely on its own merits against the codebase and backend contracts.
 
 Provide the agent with:
 - The spec file path
@@ -110,7 +133,11 @@ Provide the agent with:
 
 The agent should categorize findings as: Critical / Important / Minor / Suggestions.
 
-After receiving the review:
+**Why opus:** Spec review is a critical gate — a missed issue here cascades through the entire implementation. This is not the place to save on model cost.
+
+**Parallel local LLM review (optional):** If `craft-skills:llm-review` skill is available, invoke it on the spec file **in parallel** with the opus agent. Free supplementary review — may catch issues the opus agent missed.
+
+After receiving the review(s):
 1. **Triage findings** — not everything flagged is actually wrong (the reviewer lacks conversation context). Evaluate each finding against what was discussed with the user.
 2. **Fix confirmed issues** in the spec.
 3. **Ask the user** about any findings that require a product decision.
@@ -146,7 +173,7 @@ Break into bite-sized tasks (2-5 minutes each):
 
 ### 2.4 Agent Plan Review
 
-Spawn a fresh agent (code-reviewer type, opus model) to review the plan with zero prior context.
+Spawn a fresh agent (**code-reviewer type, sonnet model**) to review the plan with zero prior context.
 
 Provide the agent with:
 - The plan file path
@@ -156,12 +183,16 @@ Provide the agent with:
 
 The agent should categorize findings as: Critical / Important / Minor / Suggestions.
 
-After receiving the review:
+**Why sonnet:** The plan is a structured breakdown of an already-reviewed spec. The review checks coverage and ordering — systematic work that doesn't require opus-level reasoning.
+
+**Parallel local LLM review (optional):** If `craft-skills:llm-review` skill is available, invoke it on the plan file **in parallel** with the sonnet agent. Free supplementary review — does not block the pipeline.
+
+After receiving the review(s):
 1. **Triage findings** — evaluate each against conversation context and actual codebase.
 2. **Fix confirmed issues** in the plan.
 3. **Ask the user** about any findings that require a product decision.
 
-### 2.6 Save and Approve Plan
+### 2.5 Save and Approve Plan
 
 Save to `.claude/plans/YYYY-MM-DD-{feature}.md`
 

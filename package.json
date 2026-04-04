@@ -1,6 +1,11 @@
 {
   "name": "craft-skills",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "type": "module",
-  "description": "DDD-first frontend development skills for Next.js projects"
+  "description": "DDD-first frontend development skills for Next.js projects",
+  "scripts": {
+    "sync:check": "bash scripts/sync-check.sh",
+    "sync": "echo 'Run inside Claude Code session: /reflect evolve'",
+    "health": "echo 'Run inside Claude Code session: /reflect skills'"
+  }
 }

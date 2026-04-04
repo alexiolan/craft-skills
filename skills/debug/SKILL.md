@@ -35,6 +35,18 @@ Before touching any code:
 
 ### 1.4 Gather Evidence at Boundaries
 
+**code-review-graph + LLM agent (optional, powerful combo):**
+
+**Step 1 — Graph maps the territory:** Use `get_impact_radius_tool` or `query_graph_tool` on the suspect file. This instantly returns the full dependency chain — all callers, callees, and impacted files — without reading a single file.
+
+**Step 2 — Agent reads the code:** Pass the key files from the graph's output to the LLM agent:
+```
+bash scripts/llm-agent.sh "Read these files and find where data breaks: [2-3 key files from graph chain]. Report the data flow." <project-root>
+```
+
+Graph provides the map (which files matter), agent provides the understanding (what the code does). Together they handle complex multi-service traces that neither could do alone — graph prevents agent from wandering, agent provides code-level insight that graph can't.
+
+Also check directly:
 - Check API request/response (network tab, service layer logs)
 - Check component props (are they what you expect?)
 - Check state (React Query cache, form state)

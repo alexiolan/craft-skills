@@ -55,6 +55,16 @@ Read the plan and split it into tasks. Identify which tasks can run in parallel 
 
 Dispatch tasks to **frontend-developer** agents. Read the agent prompt template from the `implementer-prompt.md` file in this skill's directory and provide it as context to each agent along with their specific task.
 
+**Model selection per task type:**
+
+| Task Type | Model | Rationale |
+|---|---|---|
+| Data layer (types, services, queries, schemas, enums) | **sonnet** | Structured, pattern-following work with clear templates |
+| UI components (feature components, reusable UI) | **sonnet** | Follows plan instructions, builds from existing patterns |
+| Integration (wiring, routing, cross-component state) | **opus** | Requires understanding how pieces fit together |
+
+Always specify the `model` parameter when dispatching agents.
+
 Each agent **MUST**:
 1. **Read** `.shared-state.md` before starting work
 2. **Read** the full plan for their task's context
@@ -96,6 +106,24 @@ After all agents complete, review `.shared-state.md` holistically:
 - **Notes & Warnings** section has no unresolved issues
 
 If issues found, dispatch targeted fixes to frontend-developer agents. Repeat until consistent.
+
+## Step 3.5: Post-Develop Review (optional)
+
+Before running verification, use available review tools on created/modified files from `.shared-state.md`:
+
+**Step A — Identify what to review:**
+- **code-review-graph (if available):** Use the graph's blast-radius analysis to get the list of high-risk files impacted by the changes.
+- **If graph not available:** Use the files listed in `.shared-state.md` under "Created / Modified Files", prioritizing integration and feature files.
+
+**Step B — Review those files (if local LLM available):**
+Run `llm-agent.sh` with the file list from Step A:
+```
+bash scripts/llm-agent.sh "Review these files for bugs, missing imports, type mismatches, and pattern violations: [file list from Step A]" <project-root>
+```
+The agent reads the files autonomously — Claude receives only the findings without reading the files itself.
+
+**Step C — Act on findings:**
+If either review surfaces issues, dispatch targeted **sonnet** fix agents before proceeding to verification.
 
 ## Step 4: Verification
 

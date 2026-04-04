@@ -33,7 +33,7 @@ The user input is: `$ARGUMENTS`
 
 ### Step 1: Dispatch Architect Agent
 
-Dispatch an **implementation-architect** agent using the Agent tool. Read the agent prompt template from the `architect-prompt.md` file in this skill's directory, then append the requirements to it.
+Dispatch an **implementation-architect** agent (**opus model**) using the Agent tool. Read the agent prompt template from the `architect-prompt.md` file in this skill's directory, then append the requirements to it.
 
 The agent should:
 1. Read the project's CLAUDE.md thoroughly
