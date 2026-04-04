@@ -32,15 +32,11 @@ Use the **graph → LLM → manual** priority. Claude should NOT read changed fi
 - `query_graph_tool` with `importers_of` on changed files — shows what depends on the changed code
 - **Do NOT use `get_architecture_overview_tool` or `list_communities_tool`** — both can overflow context (150-300K chars)
 
-**LLM agent (MANDATORY):** Check availability: `curl -s --max-time 2 ${LLM_URL:-http://127.0.0.1:1234} > /dev/null 2>&1 && echo "LLM_AVAILABLE" || echo "LLM_UNAVAILABLE"`
+**LLM (MANDATORY):** Dispatch a **haiku** agent with `craft-skills:llm-review`.
 
-If available, dispatch with the file list from git diff **plus graph context**:
-```
-CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
-bash "$CRAFT_SCRIPTS/llm-agent.sh" "Review these changed files for: 1) Reuse opportunities — check if src/domain/shared/ui/, src/domain/shared/hooks/, or src/domain/forms/fields/ already has equivalent components 2) DDD boundary violations (cross-domain imports between business domains) 3) Unnecessary complexity or premature abstractions 4) Naming consistency. Changed files: [list from git diff]. Also check these related files flagged by graph: [high-risk files from get_impact_radius_tool]" <project-root>
-```
+Task: `explore "Review these changed files for: 1) Reuse opportunities — check if src/domain/shared/ui/, src/domain/shared/hooks/, or src/domain/forms/fields/ already has equivalent components 2) DDD boundary violations (cross-domain imports between business domains) 3) Unnecessary complexity or premature abstractions 4) Naming consistency. Changed files: [list from git diff]. Also check these related files flagged by graph: [high-risk files from get_impact_radius_tool]" <project-root>`
 
-If the scripts path was provided at session start (bootstrap context), use that instead of the `find` command.
+The agent handles the full lifecycle.
 
 **Wait for LLM results before proceeding to Steps 3-5.** The LLM handles the file reading — Claude's role in Steps 3-5 is to triage and verify LLM findings using graph data, not to re-read every file.
 

@@ -59,18 +59,13 @@ Then run targeted queries:
 
 **Do NOT use `get_architecture_overview_tool`, `list_communities_tool`, or `detect_changes_tool`** — all three can return 90-300K+ chars on large projects, overflowing context. Use targeted queries instead.
 
-**Layer 2 — LLM agent (MANDATORY):** Check LLM availability: `curl -s --max-time 2 ${LLM_URL:-http://127.0.0.1:1234} > /dev/null 2>&1 && echo "LLM_AVAILABLE" || echo "LLM_UNAVAILABLE"`
+**Layer 2 — LLM (MANDATORY):** Dispatch a **haiku** agent with `craft-skills:llm-review` in the **background**:
 
-If available, locate the scripts and dispatch a **focused** task in the **background** immediately:
+Task: `explore "Investigate [2-3 specific domain paths from graph results] for a [feature] feature. Check: 1) What types/services exist in these domains 2) How forms and validation are set up 3) Any related API endpoints. Give a structured summary." <project-root>`
 
-```
-CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
-bash "$CRAFT_SCRIPTS/llm-agent.sh" "Investigate [2-3 specific domain paths from graph results] for a [feature] feature. Check: 1) What types/services exist in these domains 2) How forms and validation are set up 3) Any related API endpoints. Give a structured summary." <project-root>
-```
+The agent handles the full lifecycle (availability check, model loading, script execution, unloading). If LLM is unavailable, the agent returns `LLM_UNAVAILABLE` — use the fallback below.
 
-If the scripts path was provided at session start (bootstrap context), use that instead of the `find` command.
-
-**Scoping rule:** Never ask the agent to "explore the whole project." Always give it specific directories or files from graph results. Broad prompts cause the agent to hit max iterations and waste time.
+**Scoping rule:** Never ask to "explore the whole project." Always scope to specific directories or files from graph results. Broad prompts cause max-iteration failures.
 
 <HARD-GATE>
 **Layer 3 — Claude reads ONLY these while LLM processes in background:**
@@ -157,7 +152,7 @@ The agent should categorize findings as: Critical / Important / Minor / Suggesti
 
 **Why opus:** Spec review is a critical gate — a missed issue here cascades through the entire implementation. This is not the place to save on model cost.
 
-**Parallel local LLM review (optional):** If `craft-skills:llm-review` skill is available, invoke it on the spec file **in parallel** with the opus agent. Free supplementary review — may catch issues the opus agent missed.
+**Parallel local LLM review:** Dispatch a **haiku** agent with `craft-skills:llm-review` **in parallel** with the opus agent. Task: `review <spec-file-path> "completeness, feasibility, backend alignment, DDD compliance"`. Free supplementary review — may catch issues the opus agent missed.
 
 After receiving the review(s):
 1. **Triage findings** — not everything flagged is actually wrong (the reviewer lacks conversation context). Evaluate each finding against what was discussed with the user.
@@ -207,7 +202,7 @@ The agent should categorize findings as: Critical / Important / Minor / Suggesti
 
 **Why sonnet:** The plan is a structured breakdown of an already-reviewed spec. The review checks coverage and ordering — systematic work that doesn't require opus-level reasoning.
 
-**Parallel local LLM review (optional):** If `craft-skills:llm-review` skill is available, invoke it on the plan file **in parallel** with the sonnet agent. Free supplementary review — does not block the pipeline.
+**Parallel local LLM review:** Dispatch a **haiku** agent with `craft-skills:llm-review` **in parallel** with the sonnet agent. Task: `review <plan-file-path> "spec coverage, task ordering, completeness, risk areas"`. Free supplementary review — does not block the pipeline.
 
 After receiving the review(s):
 1. **Triage findings** — evaluate each against conversation context and actual codebase.
