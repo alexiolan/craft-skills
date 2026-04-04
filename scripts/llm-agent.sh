@@ -193,7 +193,8 @@ MAX_ITERATIONS = 25
 total_tool_content = 0
 
 for i in range(MAX_ITERATIONS):
-    # Switch off thinking when context is large to prevent overflow
+    # Thinking is off (/no_think) for multi-turn agent to prevent context overflow
+    # Lower temperature when context grows large for more focused responses
     use_think = total_tool_content < 20000
 
     data = json.dumps({

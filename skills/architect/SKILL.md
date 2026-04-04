@@ -41,7 +41,7 @@ Before dispatching the architect agent, gather context so the agent doesn't need
 
 Task: `explore "Investigate [2-3 specific domain paths or files from graph results] for a [feature] feature. Check: 1) Existing types, services, and components 2) Patterns and conventions used 3) API endpoints if they exist. Give a structured summary." <project-root>`
 
-The agent handles the full lifecycle (availability, loading, execution, unloading). Pass `keep_loaded` if more LLM steps follow.
+The agent handles the full lifecycle (availability, loading, execution, unloading). When invoked standalone, let the agent unload. When invoked as part of a larger pipeline (e.g., craft), the calling skill controls `keep_loaded`.
 
 **Scoping rule:** Never ask the agent to "explore the whole codebase." Always scope to specific directories or files from graph results. Broad prompts cause max-iteration failures.
 

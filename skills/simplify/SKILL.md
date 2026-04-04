@@ -30,7 +30,7 @@ Use the **graph → LLM → manual** priority. Claude should NOT read changed fi
 - `get_impact_radius_tool` on each changed file — shows blast radius and downstream consumers
 - `query_graph_tool` with `imports_of` on changed files — reveals DDD boundary violations instantly
 - `query_graph_tool` with `importers_of` on changed files — shows what depends on the changed code
-- **Do NOT use `get_architecture_overview_tool` or `list_communities_tool`** — both can overflow context (150-300K chars)
+- **Do NOT use `get_architecture_overview_tool`, `list_communities_tool`, or `detect_changes_tool`** — all three can overflow context (90-300K chars)
 
 **LLM (MANDATORY):** Dispatch a **haiku** agent with `craft-skills:llm-review`.
 

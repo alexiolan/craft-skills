@@ -29,7 +29,7 @@ When you receive feature requirements:
 7. **Check domain boundaries** — Will this feature need data from multiple domains? Plan the data flow through props/shared, not cross-domain imports
 
 **Explore the codebase (graph → search → read):**
-- **Prefer graph tools when available** — first run `build_or_update_graph_tool` (incremental, fast if current). Then use `semantic_search_nodes_tool` to find related code by keyword, `query_graph_tool` with `imports_of`/`importers_of`/`file_summary` to understand structure, `get_impact_radius_tool` to assess change scope. These are instant and cost zero tokens. **Avoid `get_architecture_overview_tool` and `list_communities_tool`** — both can return 150-300K+ chars on large projects.
+- **Prefer graph tools when available** — first run `build_or_update_graph_tool` (incremental, fast if current). Then use `semantic_search_nodes_tool` to find related code by keyword, `query_graph_tool` with `imports_of`/`importers_of`/`file_summary` to understand structure, `get_impact_radius_tool` to assess change scope. These are instant and cost zero tokens. **Do NOT use `get_architecture_overview_tool`, `list_communities_tool`, or `detect_changes_tool`** — all three can return 90-300K+ chars on large projects.
 - **Then search** — Use Glob to find similar features (e.g., `src/domain/*/feature/**/*.tsx`), Grep for related patterns
 - **Read files last** — only read files identified by graph or search, not entire domains
 - Follow the "Reuse Before Create" principle from CLAUDE.md

@@ -63,7 +63,7 @@ Then run targeted queries:
 
 Task: `explore "Investigate [2-3 specific domain paths from graph results] for a [feature] feature. Check: 1) What types/services exist in these domains 2) How forms and validation are set up 3) Any related API endpoints. Give a structured summary." <project-root>`
 
-The agent handles the full lifecycle (availability check, model loading, script execution, unloading). If LLM is unavailable, the agent returns `LLM_UNAVAILABLE` — use the fallback below.
+The agent handles the full lifecycle (availability, loading, execution, unloading). Pass `keep_loaded` — more LLM steps follow in this pipeline (spec review 1.10, plan review 2.4). If LLM is unavailable, the agent returns `LLM_UNAVAILABLE` — use the fallback below.
 
 **Scoping rule:** Never ask to "explore the whole project." Always scope to specific directories or files from graph results. Broad prompts cause max-iteration failures.
 
@@ -152,7 +152,7 @@ The agent should categorize findings as: Critical / Important / Minor / Suggesti
 
 **Why opus:** Spec review is a critical gate — a missed issue here cascades through the entire implementation. This is not the place to save on model cost.
 
-**Parallel local LLM review:** Dispatch a **haiku** agent with `craft-skills:llm-review` **in parallel** with the opus agent. Task: `review <spec-file-path> "completeness, feasibility, backend alignment, DDD compliance"`. Free supplementary review — may catch issues the opus agent missed.
+**Parallel local LLM review:** Dispatch a **haiku** agent with `craft-skills:llm-review` **in parallel** with the opus agent. Task: `review <spec-file-path> "completeness, feasibility, backend alignment, DDD compliance" keep_loaded`. Free supplementary review — may catch issues the opus agent missed.
 
 After receiving the review(s):
 1. **Triage findings** — not everything flagged is actually wrong (the reviewer lacks conversation context). Evaluate each finding against what was discussed with the user.

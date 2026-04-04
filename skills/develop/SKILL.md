@@ -112,7 +112,7 @@ If issues found, dispatch targeted fixes to frontend-developer agents. Repeat un
 Before running verification, use graph + LLM to review created/modified files from `.shared-state.md`. Claude should NOT read the implementation files itself — let LLM do the reading.
 
 **Step A — Identify what to review:**
-- **code-review-graph (if available):** Run `build_or_update_graph_tool`, then use `get_impact_radius_tool` or `get_review_context_tool` on the changed files to get high-risk files. **Do NOT use `get_architecture_overview_tool` or `list_communities_tool`** — both overflow context.
+- **code-review-graph (if available):** Run `build_or_update_graph_tool`, then use `get_impact_radius_tool` or `get_review_context_tool` on the changed files to get high-risk files. **Do NOT use `get_architecture_overview_tool`, `list_communities_tool`, or `detect_changes_tool`** — all three overflow context (90-300K chars).
 - **If graph not available:** Use the files listed in `.shared-state.md` under "Created / Modified Files", prioritizing integration and feature files.
 
 **Step B — LLM reviews the files (MANDATORY):** Dispatch a **haiku** agent with `craft-skills:llm-review`.

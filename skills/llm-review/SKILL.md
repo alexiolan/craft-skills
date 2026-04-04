@@ -32,11 +32,13 @@ The user input is: `$ARGUMENTS`
 
 ### Step 1: Locate Scripts
 
+The scripts directory is provided at session start (bootstrap context) as `craft-skills scripts directory: <path>`. Use that path if available. Otherwise fall back to:
+
 ```bash
 CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
 ```
 
-If empty, return: "LLM scripts not found — craft-skills plugin may not be installed."
+If neither is available, return: "LLM scripts not found — craft-skills plugin may not be installed."
 
 ### Step 2: Check Availability
 
@@ -46,15 +48,9 @@ curl -s --max-time 2 ${LLM_URL:-http://127.0.0.1:1234} > /dev/null 2>&1 && echo 
 
 If `LLM_UNAVAILABLE`, return: "LLM_UNAVAILABLE: LM Studio server not running."
 
-### Step 2.5: Ensure 64K Context
-
-The scripts auto-detect and fix context length, but verify it explicitly:
-```bash
-~/.lmstudio/bin/lms ps 2>/dev/null | grep "qwen3.5-35b-a3b"
-```
-If CONTEXT column shows less than 65536, the scripts will auto-reload. If `lms` is not available, the scripts handle this internally — proceed to Step 3.
-
 ### Step 3: Run the Task
+
+> **Note:** Scripts auto-detect and fix context length (reload with 64K if loaded with less). No manual check needed.
 
 Choose the script based on task type:
 
