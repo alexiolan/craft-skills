@@ -43,11 +43,19 @@ if ! curl -s --max-time 2 "$URL" > /dev/null 2>&1; then
   exit 0
 fi
 
-# Auto-load model if not loaded
+# Auto-load model with correct context length
 if [ -x "$LMS" ]; then
   LOADED=$("$LMS" ps 2>/dev/null | grep -c "qwen3.5-35b-a3b")
   if [ "$LOADED" -eq 0 ]; then
-    "$LMS" load "$MODEL" -c 65536 -y 2>/dev/null
+    "$LMS" load "$MODEL" -c 65536 2>/dev/null
+  else
+    # Reload if context too small
+    CTX=$("$LMS" ps 2>/dev/null | grep "qwen3.5-35b-a3b" | grep -oE '\b[0-9]{4,6}\b' | head -1)
+    if [ -n "$CTX" ] && [ "$CTX" -lt 65536 ] 2>/dev/null; then
+      "$LMS" unload "$MODEL" 2>/dev/null
+      sleep 2
+      "$LMS" load "$MODEL" -c 65536 2>/dev/null
+    fi
   fi
 fi
 

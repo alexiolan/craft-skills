@@ -25,10 +25,18 @@ if ! "$LMS" ls 2>/dev/null | grep -q "qwen3.5-35b-a3b"; then
   exit 0
 fi
 
-# Auto-load model if not loaded (warm up ~10s)
+# Auto-load model with correct context length (warm up ~10s)
 LOADED=$("$LMS" ps 2>/dev/null | grep -c "qwen3.5-35b-a3b")
 if [ "$LOADED" -eq 0 ]; then
-  "$LMS" load "$MODEL" -c 65536 -y 2>/dev/null
+  "$LMS" load "$MODEL" -c 65536 2>/dev/null
+else
+  # Reload if context too small
+  CTX=$("$LMS" ps 2>/dev/null | grep "qwen3.5-35b-a3b" | grep -oE '\b[0-9]{4,6}\b' | head -1)
+  if [ -n "$CTX" ] && [ "$CTX" -lt 65536 ] 2>/dev/null; then
+    "$LMS" unload "$MODEL" 2>/dev/null
+    sleep 2
+    "$LMS" load "$MODEL" -c 65536 2>/dev/null
+  fi
 fi
 
 echo "LLM_AVAILABLE: $MODEL on $URL (loaded and ready)"
