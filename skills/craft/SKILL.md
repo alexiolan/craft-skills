@@ -48,21 +48,17 @@ The user input is: `$ARGUMENTS`
 
 Use the **graph → LLM → manual** priority for exploration. Each layer builds on the previous — don't skip ahead.
 
-**Layer 1 — Graph agent (zero main-context tokens):** Dispatch a **haiku** agent with `craft-skills:graph-explore` in the **background**:
+**Layer 1 — Graph agent (zero main-context tokens):** Read `<plugin-dir>/skills/graph-explore/dispatch-prompt.md` (plugin directory from bootstrap context). Dispatch a **haiku** agent in the **background** with the dispatch prompt as its prompt, prepending:
+- `Task: explore "<feature keywords>" <project-root>`
 
-Task: `explore "<feature keywords>" <project-root>`
+The agent uses graph MCP tools for semantic search, file summaries, and dependency tracing. If the agent returns `GRAPH_UNAVAILABLE`, skip to Layer 2.
 
-The agent handles graph freshness, embedding setup (one-time), semantic search with multiple keyword variations, file summaries, and dependency tracing. It returns a structured summary — Claude never calls graph tools directly.
+**Layer 2 — LLM agent (MANDATORY):** Read `<plugin-dir>/skills/llm-review/dispatch-prompt.md`. Dispatch a **haiku** agent in the **background** (parallel with Layer 1) with the dispatch prompt as its prompt, prepending:
+- `CRAFT_SCRIPTS: <scripts directory from bootstrap>`
+- `Task: explore "Investigate [2-3 domain paths relevant to the feature] for a [feature] feature. Check: 1) What types/services exist in these domains 2) How forms and validation are set up 3) Any related API endpoints. Give a structured summary." <project-root>`
+- `Keep loaded: true`
 
-If the agent returns `GRAPH_UNAVAILABLE`, skip to Layer 2.
-
-**Layer 2 — LLM agent (MANDATORY):** Dispatch a **haiku** agent with `craft-skills:llm-review` in the **background** (parallel with Layer 1 if graph is available):
-
-Task: `explore "Investigate [2-3 domain paths relevant to the feature] for a [feature] feature. Check: 1) What types/services exist in these domains 2) How forms and validation are set up 3) Any related API endpoints. Give a structured summary." <project-root>`
-
-If graph agent results are not yet available, use the feature description to guess likely domain paths. If graph results arrived first, use them to scope the LLM agent precisely.
-
-The agent handles the full lifecycle (availability, loading, execution, unloading). Pass `keep_loaded` — more LLM steps follow in this pipeline (spec review 1.10, plan review 2.4). If LLM is unavailable, the agent returns `LLM_UNAVAILABLE` — use the fallback below.
+If graph results arrived first, use them to scope the LLM agent precisely. Pass `Keep loaded: true` — more LLM steps follow (spec review 1.10, plan review 2.4). If the agent returns `LLM_UNAVAILABLE`, use the fallback below.
 
 **Scoping rule:** Never ask to "explore the whole project." Always scope to specific directories or files. Broad prompts cause max-iteration failures.
 
@@ -151,7 +147,12 @@ The agent should categorize findings as: Critical / Important / Minor / Suggesti
 
 **Why opus:** Spec review is a critical gate — a missed issue here cascades through the entire implementation. This is not the place to save on model cost.
 
-**Parallel local LLM review:** Dispatch a **haiku** agent with `craft-skills:llm-review` **in parallel** with the opus agent. Task: `review <spec-file-path> "completeness, feasibility, backend alignment, DDD compliance" keep_loaded`. Free supplementary review — may catch issues the opus agent missed.
+**Parallel local LLM review:** Read `<plugin-dir>/skills/llm-review/dispatch-prompt.md`. Dispatch a **haiku** agent **in parallel** with the opus agent, with the dispatch prompt as its prompt, prepending:
+- `CRAFT_SCRIPTS: <scripts directory from bootstrap>`
+- `Task: review <spec-file-path> "completeness, feasibility, backend alignment, DDD compliance"`
+- `Keep loaded: true`
+
+Free supplementary review — may catch issues the opus agent missed.
 
 After receiving the review(s):
 1. **Triage findings** — not everything flagged is actually wrong (the reviewer lacks conversation context). Evaluate each finding against what was discussed with the user.
@@ -203,8 +204,13 @@ The agent should categorize findings as: Critical / Important / Minor / Suggesti
 
 **Parallel supplementary reviews:** Dispatch these **in parallel** with the sonnet agent:
 
-- **LLM review:** Dispatch a **haiku** agent with `craft-skills:llm-review`. Task: `review <plan-file-path> "spec coverage, task ordering, completeness, risk areas"`.
-- **Graph impact check:** Dispatch a **haiku** agent with `craft-skills:graph-explore`. Task: `impact "<list of files being modified from the plan>"`. Catches unintended side effects from modifying shared files.
+- **LLM review:** Read `<plugin-dir>/skills/llm-review/dispatch-prompt.md`. Dispatch a **haiku** agent with the dispatch prompt as its prompt, prepending:
+  - `CRAFT_SCRIPTS: <scripts directory from bootstrap>`
+  - `Task: review <plan-file-path> "spec coverage, task ordering, completeness, risk areas"`
+  - `Keep loaded: false`
+- **Graph impact check:** Read `<plugin-dir>/skills/graph-explore/dispatch-prompt.md`. Dispatch a **haiku** agent with the dispatch prompt as its prompt, prepending:
+  - `Task: impact "<list of files being modified from the plan>"`
+  Catches unintended side effects from modifying shared files.
 
 After receiving the review(s):
 1. **Triage findings** — evaluate each against conversation context and actual codebase.

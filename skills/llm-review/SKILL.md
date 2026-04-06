@@ -7,18 +7,23 @@ description: "Dispatch as a haiku agent to run local LLM tasks. Handles the full
 
 Full lifecycle wrapper for local LLM operations. **Other skills dispatch this as a haiku agent** — they never run LLM bash commands directly.
 
-## How Other Skills Use This
+## How Other Skills Dispatch This
 
-Skills dispatch a **haiku** agent with this skill loaded, passing a task description. The agent handles everything and returns only the findings:
+**Agents CANNOT invoke skills via the Skill tool.** Calling skills must provide the agent with complete operational instructions — not a skill name.
 
-```
-Agent(model: "haiku", prompt: "Invoke craft-skills:llm-review with task: [review/explore/analyze] ...")
-```
+The correct dispatch pattern:
+1. Read `dispatch-prompt.md` from this skill's directory (`<plugin-dir>/skills/llm-review/dispatch-prompt.md`)
+2. Prepend task details: `CRAFT_SCRIPTS`, `Task`, `Keep loaded`
+3. Dispatch as a **haiku** agent with the combined text as the prompt
+
+The dispatch prompt contains the actual bash commands (`curl`, `llm-agent.sh`, `llm-review.sh`) that the agent runs directly via the Bash tool.
+
+**NEVER** dispatch an agent with "Invoke craft-skills:llm-review" — the agent will silently ignore it and just read files with Claude, completely bypassing the local LLM.
 
 **Task types:**
+- `explore "<task>" <working-directory>` — Autonomous investigation (LLM reads files itself, saves the most tokens)
 - `review <file-path> "<focus>"` — Single file review with thinking mode
 - `analyze "<task>" <file1> <file2> ...` — Multi-file analysis
-- `explore "<task>" <working-directory>` — Autonomous investigation (LLM reads files itself, saves the most tokens)
 
 ## Input
 
@@ -85,7 +90,7 @@ Before returning findings, filter out known false positives:
 bash "$CRAFT_SCRIPTS/llm-unload.sh"
 ```
 
-**Skip unloading if** the caller passes `keep_loaded` — this means another LLM step is expected soon.
+**Skip unloading if** the caller passes `Keep loaded: true` — this means another LLM step is expected soon.
 
 ### Step 6: Return
 

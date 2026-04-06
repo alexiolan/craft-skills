@@ -7,13 +7,18 @@ description: "Dispatch as a haiku agent to run code-review-graph queries. Handle
 
 Haiku agent wrapper for code-review-graph operations. Absorbs all graph query tokens and returns only a structured summary. **Other skills dispatch this as a haiku agent** — they never call graph MCP tools directly.
 
-## How Other Skills Use This
+## How Other Skills Dispatch This
 
-Skills dispatch a **haiku** agent with this skill loaded, passing a task description. The agent handles everything and returns only the findings:
+**Agents CANNOT invoke skills via the Skill tool.** Calling skills must provide the agent with complete operational instructions — not a skill name.
 
-```
-Agent(model: "haiku", prompt: "Invoke craft-skills:graph-explore with task: [explore/impact/review] ...")
-```
+The correct dispatch pattern:
+1. Read `dispatch-prompt.md` from this skill's directory (`<plugin-dir>/skills/graph-explore/dispatch-prompt.md`)
+2. Prepend the task details
+3. Dispatch as a **haiku** agent with the combined text as the prompt
+
+The dispatch prompt contains the actual MCP tool calls (via `ToolSearch`) that the agent runs directly.
+
+**NEVER** dispatch an agent with "Invoke craft-skills:graph-explore" — the agent will silently ignore it and just read files with Claude, completely bypassing the graph MCP tools.
 
 **Task types:**
 - `explore "<feature keywords>" <repo-root>` — Full feature discovery: semantic search, file summaries, dependency mapping

@@ -113,19 +113,19 @@ Before running verification, use graph + LLM to review created/modified files fr
 
 Dispatch both agents in **parallel** — graph for structural analysis, LLM for deep file review:
 
-**Step A — Graph review context:** Dispatch a **haiku** agent with `craft-skills:graph-explore`:
+**Step A — Graph review context:** Read `<plugin-dir>/skills/graph-explore/dispatch-prompt.md` (plugin directory from bootstrap context). Dispatch a **haiku** agent with the dispatch prompt as its prompt, prepending:
+- `Task: review`
 
-Task: `review`
-
-The agent auto-detects changed files from git, runs impact radius analysis, and returns high-risk files with review guidance. Claude never calls graph tools directly.
+The agent auto-detects changed files from git, runs impact radius analysis, and returns high-risk files with review guidance.
 
 If the agent returns `GRAPH_UNAVAILABLE`, use the files listed in `.shared-state.md` under "Created / Modified Files" to scope the LLM review.
 
-**Step B — LLM reviews the files (MANDATORY):** Dispatch a **haiku** agent with `craft-skills:llm-review` (parallel with Step A):
+**Step B — LLM reviews the files (MANDATORY):** Read `<plugin-dir>/skills/llm-review/dispatch-prompt.md`. Dispatch a **haiku** agent (parallel with Step A) with the dispatch prompt as its prompt, prepending:
+- `CRAFT_SCRIPTS: <scripts directory from bootstrap>`
+- `Task: explore "Review these files for bugs, missing imports, type mismatches, pattern violations, and DDD boundary violations: [file list from .shared-state.md or graph agent results]." <project-root>`
+- `Keep loaded: false`
 
-Task: `explore "Review these files for bugs, missing imports, type mismatches, pattern violations, and DDD boundary violations: [file list from .shared-state.md or graph agent results]." <project-root>`
-
-The agent handles the full lifecycle. Claude receives only the findings — **do not read the implementation files yourself**. Only read a file if you need to verify a specific LLM finding.
+Claude receives only the findings — **do not read the implementation files yourself**. Only read a file if you need to verify a specific LLM finding.
 
 If the agent returns `LLM_UNAVAILABLE`, fall back to reading only integration/wiring files (not every file).
 

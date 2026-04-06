@@ -10,9 +10,14 @@ if [ -f "$SKILL_FILE" ]; then
 
 ## Plugin Paths
 
+craft-skills plugin directory: \`$PLUGIN_DIR\`
 craft-skills scripts directory: \`$SCRIPTS_DIR\`
 
-When any skill references LLM scripts (llm-agent.sh, llm-review.sh, llm-analyze.sh, llm-check.sh, llm-unload.sh), use this full path. Example: \`bash $SCRIPTS_DIR/llm-agent.sh \"task\" /project/root\`"
+When dispatching support skill agents (llm-review, graph-explore), read their dispatch prompt from:
+  \`$PLUGIN_DIR/skills/<skill-name>/dispatch-prompt.md\`
+
+When running LLM scripts directly, use:
+  \`bash $SCRIPTS_DIR/<script-name> \"task\" /project/root\`"
   CONTENT=$(echo "$CONTENT" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
   echo "{\"additionalContext\": $CONTENT}"
 else
