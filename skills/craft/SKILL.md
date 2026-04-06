@@ -42,14 +42,12 @@ The user input is: `$ARGUMENTS`
 3. **Empty Input**:
    - Ask the user to provide either a prompt file number or direct requirements
 
-## Agent Dispatch Templates
-
-This skill dispatches graph and LLM agents at multiple points. Use these exact prompt templates — they contain the operational commands agents must run.
+## Dispatch Templates
 
 <HARD-GATE>
-**DO NOT** load `craft-skills:graph-explore` or `craft-skills:llm-review` via the Skill tool in this conversation — those are agent prompt templates, not main-conversation skills.
+**DO NOT** load `craft-skills:graph-explore` or `craft-skills:llm-review` via the Skill tool — those are reference docs, not main-conversation skills.
 **DO NOT** dispatch generic Claude agents that just read files — they bypass graph tools and the local LLM entirely.
-**DO NOT** call graph MCP tools or LLM bash scripts in the main conversation — agents handle this.
+**DO NOT** call graph MCP tools in the main conversation — the graph agent handles this.
 </HARD-GATE>
 
 ### GRAPH_AGENT_PROMPT
@@ -67,20 +65,35 @@ Dispatch as **haiku** agent. Substitute `{{TASK}}`. Include this text in the age
     If tools not found via ToolSearch, return: GRAPH_UNAVAILABLE
     Task: {{TASK}}
 
-### LLM_AGENT_PROMPT
+### LLM_BASH_COMMANDS
 
-Dispatch as **haiku** agent. Substitute `{{TASK}}`, `{{WORKING_DIR}}`, `{{KEEP_LOADED}}`. Include this text in the agent prompt:
+Run these directly in the main conversation using the **Bash tool** with `run_in_background: true`. Agents cannot reliably run bash — use the main conversation instead.
 
-    You are a local LLM agent. Run these bash commands — do NOT read code files yourself.
-    Step 1: CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
-    If empty, return: LLM_UNAVAILABLE
-    Step 2: curl -s --max-time 2 http://127.0.0.1:1234 > /dev/null 2>&1 && echo LLM_AVAILABLE || echo LLM_UNAVAILABLE
-    If LLM_UNAVAILABLE, return that immediately.
-    Step 3 (timeout 300000ms): bash "$CRAFT_SCRIPTS/llm-agent.sh" "{{TASK}}" {{WORKING_DIR}}
-    For review tasks instead: bash "$CRAFT_SCRIPTS/llm-review.sh" <file-path> "<focus>"
-    Step 4: Return findings. Filter out false positives about plugins/skills (local LLM doesn't understand those).
-    Step 5 (skip if keep_loaded is true): bash "$CRAFT_SCRIPTS/llm-unload.sh"
-    Keep loaded: {{KEEP_LOADED}}
+**Step 1 — Find scripts and check availability:**
+```bash
+CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && curl -s --max-time 2 ${LLM_URL:-http://127.0.0.1:1234} > /dev/null 2>&1 && echo "LLM_AVAILABLE:$CRAFT_SCRIPTS" || echo "LLM_UNAVAILABLE"
+```
+
+If `LLM_UNAVAILABLE`, skip the LLM step — use the fallback.
+
+**Step 2 — Run the task** (with `run_in_background: true`, timeout 300000ms):
+
+For explore tasks:
+```bash
+bash "$CRAFT_SCRIPTS/llm-agent.sh" "<task description>" <working-directory>
+```
+
+For review tasks:
+```bash
+bash "$CRAFT_SCRIPTS/llm-review.sh" <file-path> "<focus>"
+```
+
+**Step 3 — Unload** (skip if more LLM steps follow):
+```bash
+bash "$CRAFT_SCRIPTS/llm-unload.sh"
+```
+
+The LLM output is a concise summary — minimal token cost in the main conversation. Filter out false positives about plugins/skills before using the findings.
 
 ## Phase 1: Brainstorm
 
@@ -92,13 +105,12 @@ Use the **graph → LLM → manual** priority for exploration. Each layer builds
 - Task: `explore "<feature keywords>" <project-root>`
 - If returns `GRAPH_UNAVAILABLE`, skip to Layer 2.
 
-**Layer 2 — LLM agent (MANDATORY):** Dispatch using **LLM_AGENT_PROMPT** above in the **background** (parallel with Layer 1).
-- Task: `explore "Investigate [2-3 domain paths relevant to the feature] for a [feature] feature. Check: 1) What types/services exist in these domains 2) How forms and validation are set up 3) Any related API endpoints. Give a structured summary."`
-- Working dir: `<project-root>`
-- Keep loaded: `true` — more LLM steps follow (spec review 1.10, plan review 2.4)
-- If returns `LLM_UNAVAILABLE`, use the fallback below.
+**Layer 2 — LLM exploration (MANDATORY):** Run using **LLM_BASH_COMMANDS** above (parallel with Layer 1). Use `run_in_background: true`.
+- Task: `explore "Investigate [2-3 domain paths relevant to the feature] for a [feature] feature. Check: 1) What types/services exist in these domains 2) How forms and validation are set up 3) Any related API endpoints. Give a structured summary." <project-root>`
+- Do NOT unload — more LLM steps follow (spec review 1.10, plan review 2.4)
+- If `LLM_UNAVAILABLE`, use the fallback below.
 
-If graph results arrived first, use them to scope the LLM agent precisely.
+If graph results arrived first, use them to scope the LLM task precisely.
 
 **Scoping rule:** Never ask to "explore the whole project." Always scope to specific directories or files. Broad prompts cause max-iteration failures.
 
@@ -187,10 +199,9 @@ The agent should categorize findings as: Critical / Important / Minor / Suggesti
 
 **Why opus:** Spec review is a critical gate — a missed issue here cascades through the entire implementation. This is not the place to save on model cost.
 
-**Parallel local LLM review:** Dispatch using **LLM_AGENT_PROMPT** in parallel with the opus agent.
+**Parallel local LLM review:** Run using **LLM_BASH_COMMANDS** (parallel with opus agent, `run_in_background: true`).
 - Task: `review <spec-file-path> "completeness, feasibility, backend alignment, DDD compliance"`
-- Working dir: `<project-root>`
-- Keep loaded: `true`
+- Do NOT unload — more LLM steps may follow.
 
 Free supplementary review — may catch issues the opus agent missed.
 
@@ -244,7 +255,7 @@ The agent should categorize findings as: Critical / Important / Minor / Suggesti
 
 **Parallel supplementary reviews:** Dispatch these **in parallel** with the sonnet agent:
 
-- **LLM review:** Dispatch using **LLM_AGENT_PROMPT**. Task: `review <plan-file-path> "spec coverage, task ordering, completeness, risk areas"`. Working dir: `<project-root>`. Keep loaded: `false`.
+- **LLM review:** Run using **LLM_BASH_COMMANDS** (`run_in_background: true`). Task: `review <plan-file-path> "spec coverage, task ordering, completeness, risk areas"`. Unload after.
 - **Graph impact check:** Dispatch using **GRAPH_AGENT_PROMPT**. Task: `impact "<list of files being modified from the plan>"`. Catches unintended side effects.
 
 After receiving the review(s):

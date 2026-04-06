@@ -54,20 +54,19 @@ Before dispatching the architect agent, gather context. Dispatch both agents in 
 
 Task: `explore "<feature keywords>" <project-root>`. If returns `GRAPH_UNAVAILABLE`, skip.
 
-**LLM agent (MANDATORY):** Dispatch a **haiku** agent (parallel with graph) with this prompt (substitute `{{TASK}}`, `{{WORKING_DIR}}`, `{{KEEP_LOADED}}`):
+**LLM exploration (MANDATORY):** Run using the Bash tool directly (parallel with graph, `run_in_background: true`). Agents cannot reliably run bash — use the main conversation.
 
-    You are a local LLM agent. Run these bash commands — do NOT read code files yourself.
-    Step 1: CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
-    If empty, return: LLM_UNAVAILABLE
-    Step 2: curl -s --max-time 2 http://127.0.0.1:1234 > /dev/null 2>&1 && echo LLM_AVAILABLE || echo LLM_UNAVAILABLE
-    If LLM_UNAVAILABLE, return that immediately.
-    Step 3 (timeout 300000ms): bash "$CRAFT_SCRIPTS/llm-agent.sh" "{{TASK}}" {{WORKING_DIR}}
-    Step 4: Return findings. Filter out false positives about plugins/skills.
-    Step 5 (skip if keep_loaded is true): bash "$CRAFT_SCRIPTS/llm-unload.sh"
-    Keep loaded: {{KEEP_LOADED}}
+```bash
+CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && curl -s --max-time 2 ${LLM_URL:-http://127.0.0.1:1234} > /dev/null 2>&1 && echo "LLM_AVAILABLE:$CRAFT_SCRIPTS" || echo "LLM_UNAVAILABLE"
+```
+
+If `LLM_AVAILABLE`, run with `run_in_background: true` (timeout 300000ms):
+```bash
+bash "$CRAFT_SCRIPTS/llm-agent.sh" "<task>" <working-dir>
+```
 
 Task: `explore "Investigate [2-3 domain paths relevant to the feature] for a [feature] feature. Check: 1) Existing types, services, and components 2) Patterns and conventions used 3) API endpoints if they exist. Give a structured summary." <project-root>`.
-Keep loaded: `false` (standalone) or `true` (part of craft pipeline).
+When standalone, unload after (`bash "$CRAFT_SCRIPTS/llm-unload.sh"`). When part of craft pipeline, skip unloading.
 
 **Scoping rule:** Never ask to "explore the whole codebase." Always scope to specific directories or files.
 

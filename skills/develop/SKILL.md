@@ -130,22 +130,22 @@ Dispatch both agents in **parallel** — graph for structural analysis, LLM for 
 
 If returns `GRAPH_UNAVAILABLE`, use files from `.shared-state.md` to scope the LLM review.
 
-**Step B — LLM reviews the files (MANDATORY):** Dispatch a **haiku** agent (parallel with Step A) with this prompt (substitute `{{TASK}}`, `{{WORKING_DIR}}`):
+**Step B — LLM reviews the files (MANDATORY):** Run using the Bash tool directly (parallel with Step A, `run_in_background: true`). Agents cannot reliably run bash.
 
-    You are a local LLM agent. Run these bash commands — do NOT read code files yourself.
-    Step 1: CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
-    If empty, return: LLM_UNAVAILABLE
-    Step 2: curl -s --max-time 2 http://127.0.0.1:1234 > /dev/null 2>&1 && echo LLM_AVAILABLE || echo LLM_UNAVAILABLE
-    If LLM_UNAVAILABLE, return that immediately.
-    Step 3 (timeout 300000ms): bash "$CRAFT_SCRIPTS/llm-agent.sh" "{{TASK}}" {{WORKING_DIR}}
-    Step 4: Return findings. Filter out false positives about plugins/skills.
-    Step 5: bash "$CRAFT_SCRIPTS/llm-unload.sh"
+```bash
+CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && curl -s --max-time 2 ${LLM_URL:-http://127.0.0.1:1234} > /dev/null 2>&1 && echo "LLM_AVAILABLE:$CRAFT_SCRIPTS" || echo "LLM_UNAVAILABLE"
+```
 
-Task: `explore "Review these files for bugs, missing imports, type mismatches, pattern violations, and DDD boundary violations: [file list from .shared-state.md or graph agent results]." <project-root>`.
+If `LLM_AVAILABLE`, run with `run_in_background: true` (timeout 300000ms):
+```bash
+bash "$CRAFT_SCRIPTS/llm-agent.sh" "Review these files for bugs, missing imports, type mismatches, pattern violations, and DDD boundary violations: [file list from .shared-state.md or graph agent results]." <project-root>
+```
 
-Claude receives only the findings — **do not read the implementation files yourself**. Only read a file if you need to verify a specific LLM finding.
+Then unload: `bash "$CRAFT_SCRIPTS/llm-unload.sh"`
 
-If returns `LLM_UNAVAILABLE`, fall back to reading only integration/wiring files (not every file).
+Claude receives only the findings — **do not read the implementation files yourself**. Only read a file if you need to verify a specific LLM finding. Filter out false positives about plugins/skills.
+
+If `LLM_UNAVAILABLE`, fall back to reading only integration/wiring files (not every file).
 
 **Step C — Act on findings:**
 If either review surfaces issues, dispatch targeted **sonnet** fix agents before proceeding to verification.
