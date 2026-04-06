@@ -33,19 +33,43 @@ The user input is: `$ARGUMENTS`
 
 ### Step 0: Pre-Exploration (save architect tokens)
 
-Before dispatching the architect agent, gather context so the agent doesn't need to read files itself. Dispatch both agents in **parallel** — graph for structure, LLM for deep file reading.
+Before dispatching the architect agent, gather context. Dispatch both agents in **parallel**.
 
-**Graph agent:** Read `<plugin-dir>/skills/graph-explore/dispatch-prompt.md` (plugin directory from bootstrap context). Dispatch a **haiku** agent with the dispatch prompt as its prompt, prepending:
-- `Task: explore "<feature keywords>" <project-root>`
+<HARD-GATE>
+**DO NOT** load `craft-skills:graph-explore` or `craft-skills:llm-review` via the Skill tool — they are agent prompt templates, not main-conversation skills.
+**DO NOT** dispatch generic Claude agents that just read files — they bypass graph and LLM tools.
+</HARD-GATE>
 
-If the agent returns `GRAPH_UNAVAILABLE`, skip.
+**Graph agent:** Dispatch a **haiku** agent with this prompt (substitute `{{TASK}}`):
 
-**LLM agent (MANDATORY):** Read `<plugin-dir>/skills/llm-review/dispatch-prompt.md`. Dispatch a **haiku** agent (parallel with graph agent) with the dispatch prompt as its prompt, prepending:
-- `CRAFT_SCRIPTS: <scripts directory from bootstrap>`
-- `Task: explore "Investigate [2-3 domain paths relevant to the feature] for a [feature] feature. Check: 1) Existing types, services, and components 2) Patterns and conventions used 3) API endpoints if they exist. Give a structured summary." <project-root>`
-- `Keep loaded: false` (when standalone) or `Keep loaded: true` (when part of a larger pipeline like craft)
+    You are a graph exploration agent. Use ToolSearch to find "code-review-graph" MCP tools, then:
+    1. Run build_or_update_graph_tool (ensure graph is fresh)
+    2. Run semantic_search_nodes_tool with feature keywords (try 2-3 variations)
+    3. For relevant domains: query_graph_tool with "file_summary"
+    4. For key files: query_graph_tool with "imports_of" and "importers_of"
+    5. Return structured summary: Relevant Code, Domain Structure, Dependencies, Starting Points
+    NEVER use get_architecture_overview_tool, list_communities_tool, or detect_changes_tool.
+    If tools not found, return: GRAPH_UNAVAILABLE
+    Task: {{TASK}}
 
-**Scoping rule:** Never ask the LLM agent to "explore the whole codebase." Always scope to specific directories or files. Broad prompts cause max-iteration failures.
+Task: `explore "<feature keywords>" <project-root>`. If returns `GRAPH_UNAVAILABLE`, skip.
+
+**LLM agent (MANDATORY):** Dispatch a **haiku** agent (parallel with graph) with this prompt (substitute `{{TASK}}`, `{{WORKING_DIR}}`, `{{KEEP_LOADED}}`):
+
+    You are a local LLM agent. Run these bash commands — do NOT read code files yourself.
+    Step 1: CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
+    If empty, return: LLM_UNAVAILABLE
+    Step 2: curl -s --max-time 2 http://127.0.0.1:1234 > /dev/null 2>&1 && echo LLM_AVAILABLE || echo LLM_UNAVAILABLE
+    If LLM_UNAVAILABLE, return that immediately.
+    Step 3 (timeout 300000ms): bash "$CRAFT_SCRIPTS/llm-agent.sh" "{{TASK}}" {{WORKING_DIR}}
+    Step 4: Return findings. Filter out false positives about plugins/skills.
+    Step 5 (skip if keep_loaded is true): bash "$CRAFT_SCRIPTS/llm-unload.sh"
+    Keep loaded: {{KEEP_LOADED}}
+
+Task: `explore "Investigate [2-3 domain paths relevant to the feature] for a [feature] feature. Check: 1) Existing types, services, and components 2) Patterns and conventions used 3) API endpoints if they exist. Give a structured summary." <project-root>`.
+Keep loaded: `false` (standalone) or `true` (part of craft pipeline).
+
+**Scoping rule:** Never ask to "explore the whole codebase." Always scope to specific directories or files.
 
 Wait for both agents to complete. Pass their findings to the architect agent in Step 1.
 
