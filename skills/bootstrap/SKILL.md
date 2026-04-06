@@ -38,6 +38,13 @@ If there is even a 1% chance that a craft-skill applies to what you are about to
 | `craft-skills:develop` | Approved plan exists, ready to execute. User says "develop", "build it", or references a plan to execute. |
 | `craft-skills:browser-test` | Feature is built, needs browser testing. User says "test in browser", "check the UI", or testing is the next pipeline step. |
 
+### Support Skills (dispatched as agents by other skills)
+
+| Skill | Usage |
+|---|---|
+| `craft-skills:graph-explore` | Dispatched by craft, architect, develop, simplify, debug for code-review-graph queries. Not invoked directly. |
+| `craft-skills:llm-review` | Dispatched by craft, architect, develop, simplify, debug for local LLM analysis. Not invoked directly. |
+
 ### Priority Order
 
 When multiple skills could apply:

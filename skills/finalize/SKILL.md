@@ -1,6 +1,6 @@
 ---
 name: finalize
-description: "Use when an approved implementation plan already exists (from brainstorming, writing-plans, or architect) and needs to be executed and tested. Combines develop + browser-test into a single pipeline."
+description: "Use when an approved implementation plan already exists (from craft, implement, or architect) and needs to be executed and tested. Combines develop + browser-test into a single pipeline."
 ---
 
 # Finalize
