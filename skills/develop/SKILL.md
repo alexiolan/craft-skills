@@ -111,27 +111,29 @@ If issues found, dispatch targeted fixes to frontend-developer agents. Repeat un
 
 Before running verification, use graph + LLM to review created/modified files from `.shared-state.md`. Claude should NOT read the implementation files itself — let LLM do the reading.
 
-<HARD-GATE>
-**Step A MUST complete before Step B.** Do NOT dispatch any agents until the Bash command in Step A returns.
-</HARD-GATE>
+Run graph tools and LLM bash directly — no dedicated agents for these.
 
-**Step A — Check LM Studio (Bash tool, foreground, wait for result):**
+**Step A — Check LM Studio (Bash tool, wait for result):**
 ```bash
 CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && curl -s --max-time 2 ${LLM_URL:-http://127.0.0.1:1234} > /dev/null 2>&1 && echo "LLM_AVAILABLE:$CRAFT_SCRIPTS" || echo "LLM_UNAVAILABLE"
 ```
 
-**Step B — Based on Step A result, dispatch reviews:**
+**Step B — Start LLM review in background (if available):**
 
-If `LLM_AVAILABLE:<scripts-path>`, send these two calls in one message:
+If `LLM_AVAILABLE`, run with Bash tool (`run_in_background: true`, timeout 300000ms):
+```bash
+bash "$CRAFT_SCRIPTS/llm-agent.sh" "Review these files for bugs, missing imports, type mismatches, pattern violations, and DDD boundary violations: [file list from .shared-state.md or graph results]." <project-root>
+```
 
-| # | Tool | What |
-|---|---|---|
-| 1 | **Bash** (`run_in_background: true`, timeout: 300000) | `bash "<scripts-path>/llm-agent.sh" "Review these files for bugs, missing imports, type mismatches, pattern violations, DDD violations: [file list from .shared-state.md or graph]." <project-root>` |
-| 2 | **Agent** (haiku, `run_in_background: true`) | Graph review agent: Use ToolSearch for "code-review-graph" MCP tools, then build_or_update_graph, get_review_context. Task: `review` |
+Then unload: `bash "$CRAFT_SCRIPTS/llm-unload.sh"`. If `LLM_UNAVAILABLE`, fall back to reading only integration/wiring files.
 
-If `LLM_UNAVAILABLE`, dispatch only the graph agent. Fall back to reading only integration/wiring files.
+**Step C — Run graph review (while LLM processes):**
 
-Then unload: `bash "<scripts-path>/llm-unload.sh"`
+Load graph MCP tools via ToolSearch (search for "code-review-graph"), then run:
+1. `build_or_update_graph_tool` — capture new files
+2. `get_review_context_tool` — auto-detects changed files from git
+
+**NEVER** use `get_architecture_overview_tool`, `list_communities_tool`, or `detect_changes_tool`.
 
 Claude receives only the findings — **do not read the implementation files yourself**. Filter out false positives about plugins/skills.
 

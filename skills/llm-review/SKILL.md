@@ -5,20 +5,17 @@ description: "Dispatch as a haiku agent to run local LLM tasks. Handles the full
 
 # LLM Review
 
-Full lifecycle wrapper for local LLM operations. **Other skills dispatch this as a haiku agent** — they never run LLM bash commands directly.
+Full lifecycle wrapper for local LLM operations. **Other skills run LLM bash commands directly in the main conversation** — no dedicated agents.
 
-## How Other Skills Dispatch This
+## How Other Skills Use This
 
-**Agents CANNOT invoke skills via the Skill tool.** Calling skills must provide the agent with complete operational instructions — not a skill name.
+Calling skills run the bash commands directly using the Bash tool. The typical pattern:
 
-The correct dispatch pattern:
-1. Read `dispatch-prompt.md` from this skill's directory (`<plugin-dir>/skills/llm-review/dispatch-prompt.md`)
-2. Prepend task details: `CRAFT_SCRIPTS`, `Task`, `Keep loaded`
-3. Dispatch as a **haiku** agent with the combined text as the prompt
+1. Check availability: `CRAFT_SCRIPTS=$(find ...) && curl -s --max-time 2 http://127.0.0.1:1234 ... && echo "LLM_AVAILABLE:$CRAFT_SCRIPTS" || echo "LLM_UNAVAILABLE"`
+2. Run task in background: `bash "$CRAFT_SCRIPTS/llm-agent.sh" "<task>" <working-dir>` (with `run_in_background: true`)
+3. Unload when done: `bash "$CRAFT_SCRIPTS/llm-unload.sh"`
 
-The dispatch prompt contains the actual bash commands (`curl`, `llm-agent.sh`, `llm-review.sh`) that the agent runs directly via the Bash tool.
-
-**NEVER** dispatch an agent with "Invoke craft-skills:llm-review" — the agent will silently ignore it and just read files with Claude, completely bypassing the local LLM.
+Each calling skill has the exact commands inline. This skill serves as the detailed reference.
 
 **Task types:**
 - `explore "<task>" <working-directory>` — Autonomous investigation (LLM reads files itself, saves the most tokens)

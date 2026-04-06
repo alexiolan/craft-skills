@@ -38,20 +38,14 @@ If there is even a 1% chance that a craft-skill applies to what you are about to
 | `craft-skills:develop` | Approved plan exists, ready to execute. User says "develop", "build it", or references a plan to execute. |
 | `craft-skills:browser-test` | Feature is built, needs browser testing. User says "test in browser", "check the UI", or testing is the next pipeline step. |
 
-### Support Skills (dispatched as agents — NOT via Skill tool)
+### Support Skills (reference docs — run directly in main conversation)
 
 | Skill | Usage |
 |---|---|
-| `craft-skills:graph-explore` | Dispatched by craft, architect, develop, simplify, debug for code-review-graph queries. Not invoked directly. |
-| `craft-skills:llm-review` | Dispatched by craft, architect, develop, simplify, debug for local LLM analysis. Not invoked directly. |
+| `craft-skills:graph-explore` | Reference for graph MCP tool queries. Calling skills run graph tools directly via ToolSearch — no agents. |
+| `craft-skills:llm-review` | Reference for local LLM scripts. Calling skills run bash commands directly — no agents. |
 
-**CRITICAL — Agent Dispatch Rules:** Spawned agents (via the Agent tool) CANNOT invoke skills via the Skill tool. Support skills provide `dispatch-prompt.md` files — self-contained agent prompts with the actual bash commands and MCP tool calls. Calling skills must:
-
-1. Read `<plugin-dir>/skills/<skill-name>/dispatch-prompt.md`
-2. Prepend task-specific details (scripts path, task description, working directory)
-3. Dispatch a **haiku** agent with the combined text as the prompt
-
-**NEVER** dispatch an agent with "Invoke craft-skills:X" — the agent will silently ignore it and fall back to reading files with Claude, completely bypassing the local LLM or graph tools.
+**How these work:** Graph MCP tools and LLM bash scripts run directly in the main conversation. Do NOT dispatch dedicated agents for graph or LLM — agents cannot reliably run bash scripts and add unnecessary indirection. Each calling skill contains the exact bash commands and graph tool sequences inline.
 
 ### Priority Order
 

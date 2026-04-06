@@ -33,29 +33,31 @@ The user input is: `$ARGUMENTS`
 
 ### Step 0: Pre-Exploration (save architect tokens)
 
-Before dispatching the architect agent, gather context.
+Before dispatching the architect agent, gather context directly — no dedicated agents for graph or LLM.
 
-<HARD-GATE>
-**Step 1 MUST complete before Step 2.** Do NOT dispatch any agents until the Bash command in Step 1 returns.
-</HARD-GATE>
-
-**Step 1 — Check LM Studio (Bash tool, foreground, wait for result):**
+**Step 1 — Check LM Studio (Bash tool, wait for result):**
 ```bash
 CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && curl -s --max-time 2 ${LLM_URL:-http://127.0.0.1:1234} > /dev/null 2>&1 && echo "LLM_AVAILABLE:$CRAFT_SCRIPTS" || echo "LLM_UNAVAILABLE"
 ```
 
-**Step 2 — Based on Step 1 result, dispatch explorations:**
+**Step 2 — Start LLM exploration in background (if available):**
 
-If `LLM_AVAILABLE:<scripts-path>`, send these two calls in one message:
+If `LLM_AVAILABLE`, run with Bash tool (`run_in_background: true`, timeout 300000ms):
+```bash
+bash "$CRAFT_SCRIPTS/llm-agent.sh" "Investigate [2-3 domain paths] for a [feature] feature. Check: types, services, components, patterns, API endpoints. Structured summary." <project-root>
+```
 
-| # | Tool | What |
-|---|---|---|
-| 1 | **Bash** (`run_in_background: true`, timeout: 300000) | `bash "<scripts-path>/llm-agent.sh" "Investigate [2-3 domain paths] for a [feature] feature. Check: types, services, components, patterns, API endpoints. Structured summary." <project-root>` |
-| 2 | **Agent** (haiku, `run_in_background: true`) | Graph agent prompt: Use ToolSearch for "code-review-graph" MCP tools, then build_or_update_graph, semantic_search_nodes, query_graph (file_summary, imports_of, importers_of). Task: `explore "<keywords>" <project-root>` |
+When standalone, unload after (`bash "$CRAFT_SCRIPTS/llm-unload.sh"`). When part of craft pipeline, skip unloading.
 
-If `LLM_UNAVAILABLE`, dispatch only the graph agent.
+**Step 3 — Run graph exploration (while LLM processes):**
 
-When standalone, unload after (`bash "<scripts-path>/llm-unload.sh"`). When part of craft pipeline, skip unloading.
+Load graph MCP tools via ToolSearch (search for "code-review-graph"), then run:
+1. `build_or_update_graph_tool` — ensure graph is fresh
+2. `semantic_search_nodes_tool` — search with feature keywords (2-3 variations)
+3. For relevant domains: `query_graph_tool` with `file_summary`
+4. For key files: `query_graph_tool` with `imports_of` and `importers_of`
+
+**NEVER** use `get_architecture_overview_tool`, `list_communities_tool`, or `detect_changes_tool`.
 
 **Scoping rule:** Never ask to "explore the whole codebase." Always scope to specific directories or files.
 

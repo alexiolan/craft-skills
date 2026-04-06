@@ -19,8 +19,6 @@ This pipeline uses a three-tier model strategy to optimize speed, cost, and qual
 | **Balanced** | sonnet | Context exploration agents, plan review agent, data layer + UI implementation agents | Good balance — doesn't need opus-level reasoning |
 | **Fast** | haiku | Browser test agents | Fast and cheap — UI clicks and text verification |
 
-**Optional integrations:** The pipeline can leverage `craft-skills:llm-review` (local LLM) for supplementary reviews and `code-review-graph` for targeted file selection. See each skill/plugin for setup.
-
 When dispatching Claude agents, always specify the `model` parameter explicitly. The main conversation model is controlled by the user — these guidelines apply only to dispatched agents.
 
 <HARD-GATE>
@@ -42,58 +40,43 @@ The user input is: `$ARGUMENTS`
 3. **Empty Input**:
    - Ask the user to provide either a prompt file number or direct requirements
 
-### GRAPH_AGENT_PROMPT
-
-Dispatch as **haiku** agent. Substitute `{{TASK}}`. Include this text in the agent prompt:
-
-    You are a graph exploration agent. Use ToolSearch to find and load
-    "code-review-graph" MCP tools, then:
-    1. Run build_or_update_graph_tool (ensure graph is fresh)
-    2. Run semantic_search_nodes_tool with feature keywords (try 2-3 variations if few results)
-    3. For relevant domain directories: query_graph_tool with pattern "file_summary"
-    4. For key files: query_graph_tool with "imports_of" and "importers_of"
-    5. Return structured summary: Relevant Code, Domain Structure, Dependencies, Starting Points
-    NEVER use get_architecture_overview_tool, list_communities_tool, or detect_changes_tool.
-    If tools not found via ToolSearch, return: GRAPH_UNAVAILABLE
-    Task: {{TASK}}
-
 ## Phase 1: Brainstorm
 
 ### 1.1 Explore Context
 
-<HARD-GATE>
-**Step 1 MUST complete before Step 2.** Do NOT dispatch any Agent calls until the Bash command in Step 1 has returned output. This is not optional — LM Studio availability determines what happens next.
-</HARD-GATE>
+Run graph tools and LLM bash directly in this conversation — no dedicated agents for these.
 
-**Step 1 — Check LM Studio availability (Bash tool, foreground, wait for result):**
+**Step 1 — Check LM Studio (Bash tool, wait for result):**
 ```bash
 CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && curl -s --max-time 2 ${LLM_URL:-http://127.0.0.1:1234} > /dev/null 2>&1 && echo "LLM_AVAILABLE:$CRAFT_SCRIPTS" || echo "LLM_UNAVAILABLE"
 ```
 
-**Step 2 — Based on Step 1 result, dispatch explorations:**
+**Step 2 — Start LLM exploration in background (if available):**
 
-If Step 1 returned `LLM_AVAILABLE:<scripts-path>`, send these two calls in one message:
+If Step 1 returned `LLM_AVAILABLE`, run with Bash tool (`run_in_background: true`, timeout 300000ms):
+```bash
+bash "$CRAFT_SCRIPTS/llm-agent.sh" "Investigate [2-3 domain paths relevant to the feature] for a [feature] feature. Check: 1) What types/services exist in these domains 2) How forms and validation are set up 3) Any related API endpoints. Give a structured summary." <project-root>
+```
 
-| # | Tool | What |
-|---|---|---|
-| 1 | **Bash** (`run_in_background: true`, timeout: 300000) | `bash "<scripts-path>/llm-agent.sh" "Investigate [2-3 domain paths relevant to the feature]. Check: types, services, forms, API endpoints. Structured summary." <project-root>` |
-| 2 | **Agent** (haiku, `run_in_background: true`) | GRAPH_AGENT_PROMPT with task: `explore "<feature keywords>" <project-root>` |
+Do NOT unload — more LLM steps follow (spec review 1.10, plan review 2.4). If `LLM_UNAVAILABLE`, skip to Step 3.
 
-If Step 1 returned `LLM_UNAVAILABLE`, dispatch only the graph Agent. Use sonnet fallback agents for codebase exploration.
+**Step 3 — Run graph exploration (while LLM processes in background):**
 
-Do NOT unload the LLM — more LLM steps follow (spec review 1.10, plan review 2.4). Filter out false positives about plugins/skills from the LLM output.
+Load graph MCP tools via ToolSearch (search for "code-review-graph"), then run:
+1. `build_or_update_graph_tool` — ensure graph is fresh
+2. `semantic_search_nodes_tool` — search with feature keywords (try 2-3 variations if few results)
+3. For relevant domain directories: `query_graph_tool` with pattern `file_summary`
+4. For key files: `query_graph_tool` with `imports_of` and `importers_of`
+
+**NEVER** use `get_architecture_overview_tool`, `list_communities_tool`, or `detect_changes_tool` — they return 90-300K+ chars.
+
+**Step 4 — Read project context** (in parallel with graph queries):
+- The project's CLAUDE.md (both parent and project-level)
+- Recent git commits (`git log --oneline -10`)
 
 **Scoping rule:** Never ask to "explore the whole project." Always scope to specific directories or files.
 
-<HARD-GATE>
-**Layer 3 — Claude reads ONLY these while agents process in background:**
-- The project's CLAUDE.md (both parent and project-level)
-- Recent git commits for context (`git log --oneline -10`)
-
-**DO NOT read source files, DO NOT dispatch explore agents, DO NOT run Grep/Glob on source code.** The graph and LLM agents read the code — Claude's job is to WAIT for their findings and then interpret them. Any source file reading before agents complete defeats the purpose and wastes tokens. Do not skip ahead to 1.2 until both agents have completed or been confirmed unavailable.
-</HARD-GATE>
-
-**Fallback — if both agents are unavailable:** Dispatch **sonnet** agents for exploration.
+**Fallback — if both LLM and graph are unavailable:** Dispatch **sonnet** agents for exploration.
 
 ### 1.2 Scope Assessment
 
@@ -103,7 +86,7 @@ Before detailed questions, assess scope:
 
 ### 1.3 DDD-Specific Analysis
 
-Before asking user questions, investigate (use the agent's exploration results if available):
+Before asking user questions, investigate (use the exploration results):
 - **Which domain(s)?** Where does this feature belong?
 - **Cross-domain implications?** Will this need shared hooks or types?
 - **Existing components?** What can be reused from `src/domain/shared/` and `src/domain/forms/fields/`?
@@ -170,13 +153,11 @@ The agent should categorize findings as: Critical / Important / Minor / Suggesti
 
 **Why opus:** Spec review is a critical gate — a missed issue here cascades through the entire implementation. This is not the place to save on model cost.
 
-**Parallel local LLM review:** Use the **Bash tool** (NOT Agent tool, `run_in_background: true`, timeout 300000ms) in parallel with the opus agent:
+**Parallel local LLM review:** Run with Bash tool (`run_in_background: true`, timeout 300000ms) in parallel with the opus agent:
 ```bash
 CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && bash "$CRAFT_SCRIPTS/llm-review.sh" <spec-file-path> "completeness, feasibility, backend alignment, DDD compliance"
 ```
 Do NOT unload — more LLM steps may follow.
-
-Free supplementary review — may catch issues the opus agent missed.
 
 After receiving the review(s):
 1. **Triage findings** — not everything flagged is actually wrong (the reviewer lacks conversation context). Evaluate each finding against what was discussed with the user.
@@ -226,12 +207,12 @@ The agent should categorize findings as: Critical / Important / Minor / Suggesti
 
 **Why sonnet:** The plan is a structured breakdown of an already-reviewed spec. The review checks coverage and ordering — systematic work that doesn't require opus-level reasoning.
 
-**Parallel supplementary reviews:** Dispatch these **in parallel** with the sonnet agent:
+**Parallel supplementary reviews:**
 
-- **LLM review:** Use the **Bash tool** (NOT Agent tool, `run_in_background: true`, timeout 300000ms):
+- **LLM review:** Run with Bash tool (`run_in_background: true`, timeout 300000ms):
   `CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && bash "$CRAFT_SCRIPTS/llm-review.sh" <plan-file-path> "spec coverage, task ordering, completeness, risk areas"`
   Then unload: `bash "$CRAFT_SCRIPTS/llm-unload.sh"`
-- **Graph impact check:** Dispatch using **GRAPH_AGENT_PROMPT**. Task: `impact "<list of files being modified from the plan>"`. Catches unintended side effects.
+- **Graph impact check:** Run `get_impact_radius_tool` on each file from the plan. Catches unintended side effects from modifying shared files.
 
 After receiving the review(s):
 1. **Triage findings** — evaluate each against conversation context and actual codebase.
