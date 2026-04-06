@@ -42,22 +42,6 @@ The user input is: `$ARGUMENTS`
 3. **Empty Input**:
    - Ask the user to provide either a prompt file number or direct requirements
 
-## Dispatch Rules
-
-This skill uses two different tools for exploration. Using the wrong tool is a critical error.
-
-| What | Tool | Why |
-|---|---|---|
-| **Graph exploration** | **Agent tool** (haiku) | MCP tools work in agents; large JSON stays in agent context |
-| **LLM exploration (LM Studio)** | **Bash tool** (`run_in_background: true`) | Agents cannot run bash reliably; LLM output is a concise summary |
-
-<HARD-GATE>
-**DO NOT** use the Agent tool for LLM exploration — agents cannot run the bash scripts that contact LM Studio. Use the Bash tool instead.
-**DO NOT** load `craft-skills:graph-explore` or `craft-skills:llm-review` via the Skill tool — those are reference docs, not main-conversation skills.
-**DO NOT** dispatch generic Claude agents that just read files — they bypass graph tools and the local LLM entirely.
-**DO NOT** call graph MCP tools in the main conversation — the graph Agent handles this.
-</HARD-GATE>
-
 ### GRAPH_AGENT_PROMPT
 
 Dispatch as **haiku** agent. Substitute `{{TASK}}`. Include this text in the agent prompt:
@@ -77,29 +61,29 @@ Dispatch as **haiku** agent. Substitute `{{TASK}}`. Include this text in the age
 
 ### 1.1 Explore Context
 
-Use the **graph → LLM → manual** priority for exploration. Each layer builds on the previous — don't skip ahead.
+<HARD-GATE>
+**Step 1 MUST complete before Step 2.** Do NOT dispatch any Agent calls until the Bash command in Step 1 has returned output. This is not optional — LM Studio availability determines what happens next.
+</HARD-GATE>
 
-**Layer 1 — Graph agent (zero main-context tokens):** Dispatch using **GRAPH_AGENT_PROMPT** above in the **background**.
-- Task: `explore "<feature keywords>" <project-root>`
-- If returns `GRAPH_UNAVAILABLE`, skip to Layer 2.
-
-**Layer 2 — LLM exploration (MANDATORY):** Use the **Bash tool** (NOT Agent tool). Run in parallel with Layer 1.
-
-First, check availability (Bash tool, run now):
+**Step 1 — Check LM Studio availability (Bash tool, foreground, wait for result):**
 ```bash
 CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && curl -s --max-time 2 ${LLM_URL:-http://127.0.0.1:1234} > /dev/null 2>&1 && echo "LLM_AVAILABLE:$CRAFT_SCRIPTS" || echo "LLM_UNAVAILABLE"
 ```
 
-If `LLM_AVAILABLE`, extract the scripts path from the output and run (Bash tool, `run_in_background: true`, timeout 300000ms):
-```bash
-bash "$CRAFT_SCRIPTS/llm-agent.sh" "Investigate [2-3 domain paths relevant to the feature] for a [feature] feature. Check: 1) What types/services exist in these domains 2) How forms and validation are set up 3) Any related API endpoints. Give a structured summary." <project-root>
-```
+**Step 2 — Based on Step 1 result, dispatch explorations:**
 
-Do NOT unload — more LLM steps follow (spec review 1.10, plan review 2.4). If `LLM_UNAVAILABLE`, use the fallback below. Filter out false positives about plugins/skills from the LLM output.
+If Step 1 returned `LLM_AVAILABLE:<scripts-path>`, send these two calls in one message:
 
-If graph results arrived first, use them to scope the LLM task precisely.
+| # | Tool | What |
+|---|---|---|
+| 1 | **Bash** (`run_in_background: true`, timeout: 300000) | `bash "<scripts-path>/llm-agent.sh" "Investigate [2-3 domain paths relevant to the feature]. Check: types, services, forms, API endpoints. Structured summary." <project-root>` |
+| 2 | **Agent** (haiku, `run_in_background: true`) | GRAPH_AGENT_PROMPT with task: `explore "<feature keywords>" <project-root>` |
 
-**Scoping rule:** Never ask to "explore the whole project." Always scope to specific directories or files. Broad prompts cause max-iteration failures.
+If Step 1 returned `LLM_UNAVAILABLE`, dispatch only the graph Agent. Use sonnet fallback agents for codebase exploration.
+
+Do NOT unload the LLM — more LLM steps follow (spec review 1.10, plan review 2.4). Filter out false positives about plugins/skills from the LLM output.
+
+**Scoping rule:** Never ask to "explore the whole project." Always scope to specific directories or files.
 
 <HARD-GATE>
 **Layer 3 — Claude reads ONLY these while agents process in background:**

@@ -39,20 +39,17 @@ Use the **graph → LLM → manual** priority:
 
 **Step 1 — Graph maps the territory (if code-review-graph available):** First, ensure the graph is fresh — run `build_or_update_graph_tool` (incremental, fast if already current). Then use `get_impact_radius_tool` or `query_graph_tool` with `callers_of`/`callees_of`/`imports_of` on the suspect file. This instantly returns the full dependency chain — all callers, callees, and impacted files — without reading a single file. **Do NOT use `get_architecture_overview_tool`, `list_communities_tool`, or `detect_changes_tool`** — all three can overflow context (90-300K chars). Use targeted queries only.
 
-**Step 2 — LLM reads the code (MANDATORY):** Run using the Bash tool directly (`run_in_background: true`). Do NOT dispatch an agent — agents cannot reliably run bash.
-
+**Step 2 — LLM reads the code (MANDATORY). Run this Bash command first, wait for result:**
 ```bash
 CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && curl -s --max-time 2 ${LLM_URL:-http://127.0.0.1:1234} > /dev/null 2>&1 && echo "LLM_AVAILABLE:$CRAFT_SCRIPTS" || echo "LLM_UNAVAILABLE"
 ```
 
-If `LLM_AVAILABLE`, run with `run_in_background: true` (timeout 300000ms):
+If `LLM_AVAILABLE`, run with Bash tool (`run_in_background: true`, timeout 300000ms):
 ```bash
 bash "$CRAFT_SCRIPTS/llm-agent.sh" "Read these files and find where data breaks: [2-3 key files from graph chain]. Report the data flow and any anomalies." <project-root>
 ```
 
-Then unload: `bash "$CRAFT_SCRIPTS/llm-unload.sh"`
-
-Filter out false positives about plugins/skills. **Do not read these files yourself** — Claude's role is to interpret the LLM's findings.
+Then unload: `bash "$CRAFT_SCRIPTS/llm-unload.sh"`. Filter out false positives about plugins/skills. **Do not read these files yourself.**
 
 **Scoping rule:** Always list specific file paths — never ask the agent to "explore" or "search the whole project." Broad prompts cause max-iteration failures.
 

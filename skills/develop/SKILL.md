@@ -111,41 +111,29 @@ If issues found, dispatch targeted fixes to frontend-developer agents. Repeat un
 
 Before running verification, use graph + LLM to review created/modified files from `.shared-state.md`. Claude should NOT read the implementation files itself — let LLM do the reading.
 
-Dispatch both agents in **parallel** — graph for structural analysis, LLM for deep file review:
-
 <HARD-GATE>
-**DO NOT** load `craft-skills:graph-explore` or `craft-skills:llm-review` via the Skill tool — they are agent prompt templates, not main-conversation skills.
-**DO NOT** dispatch generic Claude agents for review — they bypass graph and LLM tools.
+**Step A MUST complete before Step B.** Do NOT dispatch any agents until the Bash command in Step A returns.
 </HARD-GATE>
 
-**Step A — Graph review context:** Dispatch a **haiku** agent with this prompt:
-
-    You are a graph exploration agent. Use ToolSearch to find "code-review-graph" MCP tools, then:
-    1. Run build_or_update_graph_tool (capture new files)
-    2. Run get_review_context_tool (auto-detects changed files from git)
-    3. Return: Changed Files, High-Risk Files, Review Guidance
-    NEVER use get_architecture_overview_tool, list_communities_tool, or detect_changes_tool.
-    If tools not found, return: GRAPH_UNAVAILABLE
-    Task: review
-
-If returns `GRAPH_UNAVAILABLE`, use files from `.shared-state.md` to scope the LLM review.
-
-**Step B — LLM reviews the files (MANDATORY):** Run using the Bash tool directly (parallel with Step A, `run_in_background: true`). Agents cannot reliably run bash.
-
+**Step A — Check LM Studio (Bash tool, foreground, wait for result):**
 ```bash
 CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && curl -s --max-time 2 ${LLM_URL:-http://127.0.0.1:1234} > /dev/null 2>&1 && echo "LLM_AVAILABLE:$CRAFT_SCRIPTS" || echo "LLM_UNAVAILABLE"
 ```
 
-If `LLM_AVAILABLE`, run with `run_in_background: true` (timeout 300000ms):
-```bash
-bash "$CRAFT_SCRIPTS/llm-agent.sh" "Review these files for bugs, missing imports, type mismatches, pattern violations, and DDD boundary violations: [file list from .shared-state.md or graph agent results]." <project-root>
-```
+**Step B — Based on Step A result, dispatch reviews:**
 
-Then unload: `bash "$CRAFT_SCRIPTS/llm-unload.sh"`
+If `LLM_AVAILABLE:<scripts-path>`, send these two calls in one message:
 
-Claude receives only the findings — **do not read the implementation files yourself**. Only read a file if you need to verify a specific LLM finding. Filter out false positives about plugins/skills.
+| # | Tool | What |
+|---|---|---|
+| 1 | **Bash** (`run_in_background: true`, timeout: 300000) | `bash "<scripts-path>/llm-agent.sh" "Review these files for bugs, missing imports, type mismatches, pattern violations, DDD violations: [file list from .shared-state.md or graph]." <project-root>` |
+| 2 | **Agent** (haiku, `run_in_background: true`) | Graph review agent: Use ToolSearch for "code-review-graph" MCP tools, then build_or_update_graph, get_review_context. Task: `review` |
 
-If `LLM_UNAVAILABLE`, fall back to reading only integration/wiring files (not every file).
+If `LLM_UNAVAILABLE`, dispatch only the graph agent. Fall back to reading only integration/wiring files.
+
+Then unload: `bash "<scripts-path>/llm-unload.sh"`
+
+Claude receives only the findings — **do not read the implementation files yourself**. Filter out false positives about plugins/skills.
 
 **Step C — Act on findings:**
 If either review surfaces issues, dispatch targeted **sonnet** fix agents before proceeding to verification.
