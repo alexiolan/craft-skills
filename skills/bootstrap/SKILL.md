@@ -31,7 +31,10 @@ If there is even a 1% chance that a craft-skill applies to what you are about to
 
 | Skill | Trigger Conditions |
 |---|---|
-| `craft-skills:craft` | New feature with unclear/complex requirements. User says "craft", "design", "brainstorm", or describes a feature that needs exploration. |
+| `craft-skills:craft` | Default craft pipeline (Claude only, no external deps). Use when requirements need deep exploration and you want the simplest, most reliable path. |
+| `craft-skills:craft-duo` | Craft with Codex as a co-executor for data-layer tasks. Use when you want cost relief and have Codex CLI installed. |
+| `craft-skills:craft-local` | Craft with LM Studio for supplementary LLM review. Use when you want deeper review and have LM Studio running. Preserves pre-1.1 craft behavior. |
+| `craft-skills:craft-squad` | Craft with all three AIs: Claude + Codex + local LLM. Power-user mode. Optionally runs Codex adversarial review if codex-plugin-cc is installed. |
 | `craft-skills:implement` | New feature with clear requirements. User says "implement", provides a prompt file number, or gives clear feature description. |
 | `craft-skills:finalize` | Plan already exists (from brainstorming or architect). User says "finalize", "execute the plan", or references an existing plan file. |
 | `craft-skills:architect` | User wants only planning, no implementation. User says "plan", "architect", or "how should we approach". |
