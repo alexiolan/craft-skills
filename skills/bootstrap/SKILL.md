@@ -54,6 +54,14 @@ When multiple skills could apply:
 2. **Pipeline skills** — craft/implement for full workflows, architect/develop/browser-test for individual steps
 3. If uncertain between craft and implement → ask the user about requirement clarity
 
+## Codex Context Setup
+
+If the project uses `/craft-duo` or `/craft-squad` (profiles that include Codex), an `AGENTS.md` file must exist at the project root. Codex reads it the same way Claude reads `CLAUDE.md`.
+
+The `develop` skill regenerates `AGENTS.md` from `CLAUDE.md` automatically in its Step 0 pre-flight check whenever a codex profile is active, if `AGENTS.md` is missing or older than `CLAUDE.md`. This keeps the two files in sync without manual intervention. The generator lives at `scripts/sync-agents-md.sh` and is idempotent.
+
+Users who only use `/craft` or `/craft-local` can ignore `AGENTS.md`; it is harmless if present.
+
 ## DDD-Aware Triggers
 
 Before any implementation work, check:
