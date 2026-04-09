@@ -114,18 +114,42 @@ Before running verification, use graph + LLM to review created/modified files fr
 Run graph tools and LLM bash directly — no dedicated agents for these.
 
 **Step A — Check LM Studio (Bash tool, wait for result):**
+
+Profile-gated. Only runs when profile includes `llm`:
+
 ```bash
-CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && curl -s --max-time 2 ${LLM_URL:-http://127.0.0.1:1234} > /dev/null 2>&1 && echo "LLM_AVAILABLE:$CRAFT_SCRIPTS" || echo "LLM_UNAVAILABLE"
+CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
+case "$CRAFT_PROFILE" in
+  *llm*)
+    CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && curl -s --max-time 2 ${LLM_URL:-http://127.0.0.1:1234} > /dev/null 2>&1 && echo "LLM_AVAILABLE:$CRAFT_SCRIPTS" || echo "LLM_UNAVAILABLE"
+    ;;
+  *)
+    echo "LLM_SKIPPED_BY_PROFILE"
+    ;;
+esac
 ```
 
-**Step B — Start LLM review in background (if available):**
+**Step B — Start LLM review in background (if available AND profile includes llm):**
 
-If `LLM_AVAILABLE`, run with Bash tool (`run_in_background: true`, timeout 300000ms):
+Skip if Step A returned `LLM_SKIPPED_BY_PROFILE` or `LLM_UNAVAILABLE`. Otherwise run with Bash tool (`run_in_background: true`, timeout 300000ms):
+
 ```bash
-bash "$CRAFT_SCRIPTS/llm-agent.sh" "Review these files for bugs, missing imports, type mismatches, pattern violations, and DDD boundary violations: [file list from .shared-state.md or graph results]." <project-root>
+CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
+case "$CRAFT_PROFILE" in
+  *llm*)
+    CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
+    bash "$CRAFT_SCRIPTS/llm-agent.sh" "Review these files for bugs, missing imports, type mismatches, pattern violations, and DDD boundary violations: [file list from .shared-state.md or graph results]." <project-root>
+    bash "$CRAFT_SCRIPTS/llm-unload.sh"
+    ;;
+  *)
+    echo "LLM_REVIEW_SKIPPED_BY_PROFILE"
+    ;;
+esac
 ```
 
-Then unload: `bash "$CRAFT_SCRIPTS/llm-unload.sh"`. If `LLM_UNAVAILABLE`, fall back to reading only integration/wiring files.
+If Step A returned `LLM_UNAVAILABLE` (but profile includes llm), fall back to reading only integration/wiring files.
+
+If Step A returned `LLM_SKIPPED_BY_PROFILE`, the graph review in Step C is the only post-develop review — no file-reading fallback.
 
 **Step C — Run graph review (while LLM processes):**
 
