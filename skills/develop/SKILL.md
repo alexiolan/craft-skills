@@ -158,4 +158,5 @@ If a step fails repeatedly (3+ attempts), stop and ask the user for guidance.
 After a successful build:
 
 1. Delete `.shared-state.md`
-2. Report a summary of all changes made, files created/modified, and any decisions worth noting
+2. Delete `.craft-profile` (if it exists — may be missing when `develop` is invoked standalone)
+3. Report a summary of all changes made, files created/modified, and any decisions worth noting
