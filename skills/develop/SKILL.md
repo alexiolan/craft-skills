@@ -16,6 +16,40 @@ The user input is: `$ARGUMENTS`
 
 If no plan is found, tell the user to run `craft-skills:architect` or `craft-skills:craft` first.
 
+## Step 0: Pre-flight Check (profile-aware)
+
+Run this as a single self-contained bash block via the Bash tool. It reads the profile marker, verifies Codex (if needed), and regenerates `AGENTS.md` (if needed). All state is local to this block — nothing is expected to persist to subsequent blocks.
+
+```bash
+CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
+echo "Profile: $CRAFT_PROFILE"
+
+case "$CRAFT_PROFILE" in
+  *codex*)
+    # Verify Codex CLI is installed
+    if ! command -v codex >/dev/null 2>&1; then
+      echo "ERROR: codex CLI not found in PATH."
+      echo "The active profile ($CRAFT_PROFILE) requires Codex."
+      echo "Install: npm i -g @openai/codex"
+      echo "Then run: codex login"
+      exit 1
+    fi
+
+    # Regenerate AGENTS.md if missing or stale
+    CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "sync-agents-md.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
+    if [[ -z "$CRAFT_SCRIPTS" ]]; then
+      echo "ERROR: craft-skills scripts directory not found"
+      exit 1
+    fi
+    if [[ ! -f "AGENTS.md" ]] || [[ "CLAUDE.md" -nt "AGENTS.md" ]]; then
+      bash "$CRAFT_SCRIPTS/sync-agents-md.sh" "$PWD"
+    fi
+    ;;
+esac
+```
+
+Fail loudly if pre-flight fails. No silent fallback — the user explicitly chose a codex profile.
+
 ## Step 1: Initialize Shared State
 
 Create a fresh `.shared-state.md` at the project root (delete if one exists from a previous run):
