@@ -89,15 +89,61 @@ Read the plan and split it into tasks. Identify which tasks can run in parallel 
 
 Dispatch tasks to **frontend-developer** agents. Read the agent prompt template from the `implementer-prompt.md` file in this skill's directory and provide it as context to each agent along with their specific task.
 
-**Model selection per task type:**
+**Executor selection per task type (profile-aware):**
 
-| Task Type | Model | Rationale |
+| Task Type | `claude` / `claude+llm` | `claude+codex` / `claude+codex+llm` |
 |---|---|---|
-| Data layer (types, services, queries, schemas, enums) | **sonnet** | Structured, pattern-following work with clear templates |
-| UI components (feature components, reusable UI) | **sonnet** | Follows plan instructions, builds from existing patterns |
-| Integration (wiring, routing, cross-component state) | **opus** | Requires understanding how pieces fit together |
+| Data layer (types, services, queries, schemas, enums, mappers) | Claude **sonnet** | **Codex** (two-tier, see below) |
+| UI components (feature components, reusable UI) | Claude **sonnet** | Claude **sonnet** |
+| Integration (wiring, routing, cross-component state) | Claude **opus** | Claude **opus** |
+| Bulk mechanical fixes (lint/tsc repair sweeps) | Claude **sonnet** | **Codex** (`codex-mini`) |
 
-Always specify the `model` parameter when dispatching agents.
+**Within-Codex two-tier routing** (only when a task is routed to Codex):
+
+| Target file glob | Codex model |
+|---|---|
+| `*/data/models/*.ts`, `*/data/enums/*.ts`, `*/data/schemas/*Schemas.ts`, `*/data/mappers/*.ts` | `codex-mini` |
+| `*/data/infrastructure/*Service.ts`, `*/data/queries/*Queries.ts` | `gpt-5-codex` |
+| Bulk lint/tsc fixes | `codex-mini` |
+
+**Hard rules:**
+1. React components (UI) always stay on Claude, even in `claude+codex+llm`. Codex has a documented weakness on React.
+2. Integration tasks always stay on Claude opus. Multi-file reasoning is Claude's strength.
+3. When dispatching Claude agents, always specify the `model` parameter explicitly.
+
+**Dispatching a Codex task:**
+
+For each task routed to Codex:
+
+1. Determine the Codex model using the file-glob table above
+2. Build the prompt by filling in the template at `skills/develop/codex-prompt.md`:
+   - `{{TASK_DESCRIPTION}}` — the task text from the plan
+   - `{{FILE_LIST}}` — the file list from the plan for this task
+   - `{{ARCHITECTURE_DECISIONS}}` — relevant architecture decisions from the plan
+   - `{{PATTERN_REFERENCES}}` — 1-2 existing files Codex should mirror (identify by searching the codebase for similar existing files)
+   - `{{SHARED_STATE_CONTENTS}}` — current contents of `.shared-state.md`
+3. Write the filled prompt to `$PROJECT_ROOT/.codex-prompt-<task-id>.txt`
+4. Run:
+   ```bash
+   CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "codex-dispatch.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
+   bash "$CRAFT_SCRIPTS/codex-dispatch.sh" "$PWD" "<task-id>" "<codex-model>" "$PWD/.codex-prompt-<task-id>.txt"
+   ```
+5. Read `$PROJECT_ROOT/.codex-output-<task-id>.json` and parse the `status` field
+6. Route by status (see Error Handling below)
+7. Delete the prompt and output files when done
+
+**Error handling for Codex tasks:**
+
+| Outcome | Action |
+|---|---|
+| exit 0, status `DONE` | verify `.shared-state.md` was updated (diff check), proceed |
+| exit 0, status `DONE_WITH_CONCERNS` | log concerns from JSON, decide if a fix agent is needed, proceed |
+| exit 0, status `NEEDS_CONTEXT` | provide missing context from plan/shared-state, re-dispatch the same task |
+| exit 0, status `BLOCKED` | investigate blocker, fix root cause, re-dispatch |
+| exit 0, output JSON missing or invalid | dispatch Claude **sonnet** reconcile agent to review Codex's file changes and update `.shared-state.md` |
+| exit non-zero | dispatch Claude **sonnet** fallback agent for this specific task, note the fallback in `.shared-state.md` |
+
+**Shared-state reconcile safeguard:** After every successful Codex run, diff `.shared-state.md` before and after the dispatch. If the file was not updated but Codex made file changes, dispatch a sonnet reconcile agent to inspect the changes and write the correct entries to shared state.
 
 Each agent **MUST**:
 1. **Read** `.shared-state.md` before starting work
