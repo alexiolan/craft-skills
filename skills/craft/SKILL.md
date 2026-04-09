@@ -42,6 +42,16 @@ The user input is: `$ARGUMENTS`
 
 ## Phase 1: Brainstorm
 
+### 1.0 Set Executor Profile
+
+First action in the pipeline. Write the profile marker so later steps can gate behavior correctly.
+
+```bash
+echo -n "claude" > .craft-profile
+```
+
+This is the base `/craft` profile — Claude only, no Codex, no local LLM. LLM-related steps in this file are gated on this profile and will be skipped. Users who want LLM-assisted review should invoke `/craft-local` instead.
+
 ### 1.1 Explore Context
 
 Run graph tools and LLM bash directly in this conversation — no dedicated agents for these.
