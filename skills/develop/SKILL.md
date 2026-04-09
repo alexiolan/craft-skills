@@ -241,8 +241,33 @@ Load graph MCP tools via ToolSearch (search for "code-review-graph"), then run:
 
 Claude receives only the findings — **do not read the implementation files yourself**. Filter out false positives about plugins/skills.
 
+**Step C.5 — Codex adversarial review (optional, profile-gated):**
+
+Runs only when profile includes `codex` AND the `codex-plugin-cc` plugin is installed. This provides a skeptical second-opinion code review from GPT-5-codex on Claude's implementation.
+
+```bash
+CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
+case "$CRAFT_PROFILE" in
+  *codex*)
+    # Check if codex-plugin-cc is installed (plugin has /codex:* commands)
+    if [[ -d ~/.claude/plugins/cache/codex-plugin-cc ]] || [[ -d ~/.claude/plugins/codex-plugin-cc ]]; then
+      echo "ADVERSARIAL_REVIEW_AVAILABLE"
+    else
+      echo "ADVERSARIAL_REVIEW_UNAVAILABLE_NO_PLUGIN"
+    fi
+    ;;
+  *)
+    echo "ADVERSARIAL_REVIEW_SKIPPED_BY_PROFILE"
+    ;;
+esac
+```
+
+If the check returned `ADVERSARIAL_REVIEW_AVAILABLE`, invoke the `codex-plugin-cc:adversarial-review` skill via the Skill tool. Pass the list of changed files from `.shared-state.md` as the review scope. When the skill returns, capture its findings and include them in the final Step C (Act on findings) triage alongside the graph and LLM review results.
+
+If the plugin is not installed or the profile excludes codex, skip this step silently. This is a bonus, not a dependency — no error, no warning, no prompt to the user.
+
 **Step C — Act on findings:**
-If either review surfaces issues, dispatch targeted **sonnet** fix agents before proceeding to verification.
+If any review (graph, LLM, or adversarial) surfaces issues, dispatch targeted **sonnet** fix agents before proceeding to verification.
 
 ## Step 4: Verification
 
