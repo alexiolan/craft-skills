@@ -57,18 +57,41 @@ This is the base `/craft` profile — Claude only, no Codex, no local LLM. LLM-r
 Run graph tools and LLM bash directly in this conversation — no dedicated agents for these.
 
 **Step 1 — Check LM Studio (Bash tool, wait for result):**
+
+Profile-gated. Only runs when profile includes `llm`:
+
 ```bash
-CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && curl -s --max-time 2 ${LLM_URL:-http://127.0.0.1:1234} > /dev/null 2>&1 && echo "LLM_AVAILABLE:$CRAFT_SCRIPTS" || echo "LLM_UNAVAILABLE"
+CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
+case "$CRAFT_PROFILE" in
+  *llm*)
+    CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && curl -s --max-time 2 ${LLM_URL:-http://127.0.0.1:1234} > /dev/null 2>&1 && echo "LLM_AVAILABLE:$CRAFT_SCRIPTS" || echo "LLM_UNAVAILABLE"
+    ;;
+  *)
+    echo "LLM_SKIPPED_BY_PROFILE"
+    ;;
+esac
 ```
 
-**Step 2 — Start LLM exploration in background (if available):**
+**Step 2 — Start LLM exploration in background (if available AND profile includes llm):**
 
-If Step 1 returned `LLM_AVAILABLE`, run with Bash tool (`run_in_background: true`, timeout 300000ms):
+Run only if Step 1 returned `LLM_AVAILABLE` (which only happens when the profile includes `llm`). If Step 1 returned `LLM_SKIPPED_BY_PROFILE` or `LLM_UNAVAILABLE`, skip this step.
+
+If eligible, run with Bash tool (`run_in_background: true`, timeout 300000ms). Self-contained profile check for safety:
+
 ```bash
-bash "$CRAFT_SCRIPTS/llm-agent.sh" "Investigate [2-3 domain paths relevant to the feature] for a [feature] feature. Check: 1) What types/services exist in these domains 2) How forms and validation are set up 3) Any related API endpoints. Give a structured summary." <project-root>
+CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
+case "$CRAFT_PROFILE" in
+  *llm*)
+    CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
+    bash "$CRAFT_SCRIPTS/llm-agent.sh" "Investigate [2-3 domain paths relevant to the feature] for a [feature] feature. Check: 1) What types/services exist in these domains 2) How forms and validation are set up 3) Any related API endpoints. Give a structured summary." <project-root>
+    ;;
+  *)
+    echo "LLM_EXPLORATION_SKIPPED_BY_PROFILE"
+    ;;
+esac
 ```
 
-Do NOT unload — more LLM steps follow (spec review 1.10, plan review 2.4). If `LLM_UNAVAILABLE`, skip to Step 3.
+Do NOT unload — more LLM steps follow (spec review 1.10, plan review 2.4).
 
 **Step 3 — Run graph exploration (while LLM processes in background):**
 
@@ -163,10 +186,22 @@ The agent should categorize findings as: Critical / Important / Minor / Suggesti
 
 **Why opus:** Spec review is a critical gate — a missed issue here cascades through the entire implementation. This is not the place to save on model cost.
 
-**Parallel local LLM review:** Run with Bash tool (`run_in_background: true`, timeout 300000ms) in parallel with the opus agent:
+**Parallel local LLM review (profile-gated):**
+
+Only runs when profile includes `llm`. Run with Bash tool (`run_in_background: true`, timeout 300000ms) in parallel with the opus agent:
+
 ```bash
-CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && bash "$CRAFT_SCRIPTS/llm-review.sh" <spec-file-path> "completeness, feasibility, backend alignment, DDD compliance"
+CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
+case "$CRAFT_PROFILE" in
+  *llm*)
+    CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && bash "$CRAFT_SCRIPTS/llm-review.sh" <spec-file-path> "completeness, feasibility, backend alignment, DDD compliance"
+    ;;
+  *)
+    echo "LLM_SPEC_REVIEW_SKIPPED"
+    ;;
+esac
 ```
+
 Do NOT unload — more LLM steps may follow.
 
 After receiving the review(s):
@@ -219,10 +254,20 @@ The agent should categorize findings as: Critical / Important / Minor / Suggesti
 
 **Parallel supplementary reviews:**
 
-- **LLM review:** Run with Bash tool (`run_in_background: true`, timeout 300000ms):
-  `CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && bash "$CRAFT_SCRIPTS/llm-review.sh" <plan-file-path> "spec coverage, task ordering, completeness, risk areas"`
-  Then unload: `bash "$CRAFT_SCRIPTS/llm-unload.sh"`
-- **Graph impact check:** Run `get_impact_radius_tool` on each file from the plan. Catches unintended side effects from modifying shared files.
+- **LLM review (profile-gated):** Run with Bash tool (`run_in_background: true`, timeout 300000ms):
+  ```bash
+  CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
+  case "$CRAFT_PROFILE" in
+    *llm*)
+      CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && bash "$CRAFT_SCRIPTS/llm-review.sh" <plan-file-path> "spec coverage, task ordering, completeness, risk areas"
+      bash "$CRAFT_SCRIPTS/llm-unload.sh"
+      ;;
+    *)
+      echo "LLM_PLAN_REVIEW_SKIPPED"
+      ;;
+  esac
+  ```
+- **Graph impact check:** Run `get_impact_radius_tool` on each file from the plan. Catches unintended side effects from modifying shared files. Runs in all profiles (graph is not gated).
 
 After receiving the review(s):
 1. **Triage findings** — evaluate each against conversation context and actual codebase.
