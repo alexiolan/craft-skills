@@ -5,12 +5,11 @@
 # Returns: analysis text to stdout
 #
 # Environment:
-#   LLM_URL   - API base URL (default: http://127.0.0.1:1234)
-#   LLM_MODEL - model identifier (default: qwen/qwen3.5-35b-a3b)
+#   LLM_URL            - API base URL (default: http://127.0.0.1:1234)
+#   LLM_MODEL          - model identifier (default: google/gemma-4-26b-a4b)
+#   LLM_CONTEXT_LENGTH - context window size (default: 65536)
 
-URL="${LLM_URL:-http://127.0.0.1:1234}"
-MODEL="${LLM_MODEL:-qwen/qwen3.5-35b-a3b}"
-LMS="${HOME}/.lmstudio/bin/lms"
+source "$(dirname "$0")/llm-config.sh"
 
 # Parse arguments
 TASK="$1"
@@ -24,7 +23,7 @@ fi
 FILES=()
 while [ $# -gt 0 ]; do
   if [ "$1" = "--model" ]; then
-    MODEL="$2"
+    LLM_MODEL="$2"
     shift 2
   else
     FILES+=("$1")
@@ -38,26 +37,13 @@ if [ ${#FILES[@]} -eq 0 ]; then
 fi
 
 # Check server
-if ! curl -s --max-time 2 "$URL" > /dev/null 2>&1; then
+if ! curl -s --max-time 2 "$LLM_URL" > /dev/null 2>&1; then
   echo "LLM_UNAVAILABLE"
   exit 0
 fi
 
 # Auto-load model with correct context length
-if [ -x "$LMS" ]; then
-  LOADED=$("$LMS" ps 2>/dev/null | grep -c "qwen3.5-35b-a3b")
-  if [ "$LOADED" -eq 0 ]; then
-    "$LMS" load "$MODEL" -c 65536 2>/dev/null
-  else
-    # Reload if context too small
-    CTX=$("$LMS" ps 2>/dev/null | grep "qwen3.5-35b-a3b" | grep -oE '\b[0-9]{4,6}\b' | head -1)
-    if [ -n "$CTX" ] && [ "$CTX" -lt 65536 ] 2>/dev/null; then
-      "$LMS" unload "$MODEL" 2>/dev/null
-      sleep 2
-      "$LMS" load "$MODEL" -c 65536 2>/dev/null
-    fi
-  fi
-fi
+llm_ensure_loaded
 
 # Build file content for python
 FILE_ARGS=""
@@ -65,7 +51,7 @@ for FILE in "${FILES[@]}"; do
   FILE_ARGS+="$FILE "
 done
 
-python3 - "$URL" "$MODEL" "$TASK" $FILE_ARGS <<'PYEOF'
+python3 - "$LLM_URL" "$LLM_MODEL" "$TASK" $FILE_ARGS <<'PYEOF'
 import sys, json, urllib.request, os
 
 url = sys.argv[1]
