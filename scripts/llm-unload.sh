@@ -2,7 +2,7 @@
 # Unload all models from LM Studio to free RAM
 # Run at the end of pipeline LLM steps
 
-LMS="${HOME}/.lmstudio/bin/lms"
+source "$(dirname "$0")/llm-config.sh"
 
 if [ -x "$LMS" ]; then
   "$LMS" unload --all 2>/dev/null
