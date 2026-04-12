@@ -23,7 +23,7 @@ The key insight: Gemma excels at **self-contained, pattern-driven tasks** when f
 - Replace Sonnet agent reviews (spec, plan) with Gemma reviews (free)
 - Implement try-Gemma-first with Sonnet fallback for UI components
 - Use graph-assisted reference file selection for optimal context
-- Achieve ~50-65% API cost reduction vs base `/craft`
+- Achieve ~45-60% API cost reduction vs base `/craft`
 - Create `llm-implement.sh` script for structured code generation with file writing
 
 ### Non-Goals
