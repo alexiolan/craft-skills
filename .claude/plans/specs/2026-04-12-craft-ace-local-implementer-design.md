@@ -311,14 +311,17 @@ This helps the integration review (Step 3) identify files that had bumpy paths.
 |---|---|---|
 | 1.1 LLM pre-exploration | skipped | **enabled** (Gemma explores codebase) |
 | 1.2-1.9 (design flow) | Opus | Opus (unchanged) |
-| 1.10 Spec review | Opus agent | **Gemma** (replaces, not parallel) |
+| 1.10 Spec review | Opus agent | **Gemma review loop** (replaces, max 4 rounds) |
 | 1.11 LLM spec review | skipped | **merged into 1.10** (Gemma does both) |
 
 **Gating logic for Step 1.10 in `craft/SKILL.md`:**
 ```
 if CRAFT_PROFILE == "claude+ace":
     SKIP opus agent spec review dispatch
-    RUN llm-review.sh with spec file as sole reviewer
+    LOOP (max 4 rounds):
+        RUN llm-review.sh with spec file
+        IF findings → fix confirmed issues, re-run
+        IF approved or no actionable findings → BREAK
 elif CRAFT_PROFILE matches *llm*:
     RUN opus agent spec review (existing behavior)
     RUN llm-review.sh in PARALLEL (existing behavior)
@@ -331,13 +334,16 @@ else:
 | Step | Base craft | craft-ace |
 |---|---|---|
 | 2.1-2.3 (plan creation) | Opus | Opus (unchanged) |
-| 2.4 Plan review | Sonnet agent | **Gemma** (replaces, not parallel) |
+| 2.4 Plan review | Sonnet agent | **Gemma review loop** (replaces, max 4 rounds) |
 
 **Gating logic for Step 2.4 in `craft/SKILL.md`:**
 ```
 if CRAFT_PROFILE == "claude+ace":
     SKIP sonnet agent plan review dispatch
-    RUN llm-review.sh with plan file as sole reviewer
+    LOOP (max 4 rounds):
+        RUN llm-review.sh with plan file
+        IF findings → fix confirmed issues, re-run
+        IF approved or no actionable findings → BREAK
 elif CRAFT_PROFILE matches *llm*:
     RUN sonnet agent plan review (existing behavior)
     RUN llm-review.sh in PARALLEL (existing behavior)
