@@ -174,6 +174,28 @@ Review the spec with fresh eyes:
 
 ### 1.10 Agent Spec Review
 
+**Profile gate — `claude+ace`:**
+
+When `CRAFT_PROFILE` is `claude+ace`, SKIP the opus agent spec review below. Instead, run Gemma in a review loop:
+
+```bash
+CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
+if [ "$CRAFT_PROFILE" = "claude+ace" ]; then
+  CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-review.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
+  bash "$CRAFT_SCRIPTS/llm-review.sh" <spec-file-path> "completeness, feasibility, backend alignment, DDD compliance, internal consistency"
+fi
+```
+
+**Review loop:** Since Gemma is local and free, run a review loop instead of a single pass:
+1. Run `llm-review.sh` with the spec file
+2. Triage findings — fix confirmed issues in the spec
+3. Re-run `llm-review.sh` on the updated spec
+4. Repeat until Gemma returns APPROVED or no actionable findings remain (max 4 rounds to prevent infinite loops)
+
+After the loop completes, skip directly to Step 1.11 (user review). Do NOT dispatch the opus agent or the parallel LLM review — Gemma handles both roles.
+
+For all other profiles, proceed with the existing behavior below.
+
 Spawn a fresh agent (**code-reviewer type, opus model**) to review the spec with zero prior context. The agent has no knowledge of the brainstorming conversation, so it reviews the spec purely on its own merits against the codebase and backend contracts.
 
 Provide the agent with:
@@ -239,6 +261,28 @@ Break into bite-sized tasks (2-5 minutes each):
 3. **Type consistency:** Names match across tasks?
 
 ### 2.4 Agent Plan Review
+
+**Profile gate — `claude+ace`:**
+
+When `CRAFT_PROFILE` is `claude+ace`, SKIP the sonnet agent plan review below. Instead, run Gemma in a review loop:
+
+```bash
+CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
+if [ "$CRAFT_PROFILE" = "claude+ace" ]; then
+  CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-review.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
+  bash "$CRAFT_SCRIPTS/llm-review.sh" <plan-file-path> "spec coverage, task ordering, completeness, risk areas"
+fi
+```
+
+**Review loop:** Same as Step 1.10 — loop until Gemma approves or no actionable findings (max 4 rounds). After the loop, unload the model:
+
+```bash
+bash "$CRAFT_SCRIPTS/llm-unload.sh"
+```
+
+After the loop completes, skip directly to Step 2.5 (save and approve). Do NOT dispatch the sonnet agent or the parallel LLM review.
+
+For all other profiles, proceed with the existing behavior below.
 
 Spawn a fresh agent (**code-reviewer type, sonnet model**) to review the plan with zero prior context.
 
