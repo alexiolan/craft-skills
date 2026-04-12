@@ -45,10 +45,25 @@ case "$CRAFT_PROFILE" in
       bash "$CRAFT_SCRIPTS/sync-agents-md.sh" "$PWD"
     fi
     ;;
+  "claude+ace")
+    # Verify LM Studio is running
+    CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-check.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
+    if [[ -z "$CRAFT_SCRIPTS" ]]; then
+      echo "ERROR: craft-skills scripts directory not found"
+      exit 1
+    fi
+    LLM_STATUS=$(bash "$CRAFT_SCRIPTS/llm-check.sh")
+    if [[ "$LLM_STATUS" == LLM_UNAVAILABLE* ]]; then
+      echo "ERROR: $LLM_STATUS"
+      echo "The active profile ($CRAFT_PROFILE) requires LM Studio."
+      exit 1
+    fi
+    echo "$LLM_STATUS"
+    ;;
 esac
 ```
 
-Fail loudly if pre-flight fails. No silent fallback — the user explicitly chose a codex profile.
+Fail loudly if pre-flight fails. No silent fallback — the user explicitly chose a codex or ace profile.
 
 ## Step 1: Initialize Shared State
 
@@ -106,8 +121,60 @@ Dispatch tasks to **frontend-developer** agents. Read the agent prompt template 
 | `*/data/infrastructure/*Service.ts`, `*/data/queries/*Queries.ts` | `gpt-5-codex` |
 | Bulk lint/tsc fixes | `codex-mini` |
 
+**Executor selection for `claude+ace` profile:**
+
+| Task Type | Executor |
+|---|---|
+| Data layer (types, services, queries, schemas, enums, mappers) | **Gemma** via `llm-implement.sh` |
+| UI components (feature components, reusable UI) | **Gemma** via `llm-implement.sh` → Sonnet fallback |
+| Integration (wiring, routing, cross-component state) | Claude **opus** (unchanged) |
+
+**Dispatching a Gemma task (when `CRAFT_PROFILE` is `claude+ace`):**
+
+For each non-integration task:
+
+1. **Classify** the task by target file path:
+   - `**/data/models/*.ts`, `**/data/enums/*.ts`, `**/data/schemas/*.ts`, `**/data/infrastructure/*Service.ts`, `**/data/queries/*Queries.ts`, `**/data/mappers/*.ts` → Data layer → Gemma
+   - `**/feature/**`, `**/ui/**` → UI component → Gemma (with Sonnet fallback)
+   - Tasks the plan explicitly marks as "integration" → Opus agent
+   - Multi-file tasks within same domain/layer → dispatch as one Gemma task. Cross-layer → split into sub-tasks.
+
+2. **Select reference files** using graph-first algorithm:
+   - Use `semantic_search_nodes_tool` to find a similar existing file (same type, different domain)
+   - Use `imports_of` on the reference to discover 1-2 key dependencies (max depth 1, max 3 files total)
+   - Fallback to Glob if graph unavailable
+
+3. **Write task file** to `$PROJECT_ROOT/.llm-task-<task-id>.txt` with the task description from the plan
+
+4. **Extract allowed file paths** from the plan step (the files the task says to create/modify)
+
+5. **Dispatch**:
+   ```bash
+   CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-implement.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
+   bash "$CRAFT_SCRIPTS/llm-implement.sh" "$PWD/.llm-task-<task-id>.txt" "$PWD" "<allowed-files-comma-separated>" <ref-file-1> <ref-file-2>
+   ```
+
+6. **Parse JSON output** and route by status:
+
+   | Status | Severity | Action |
+   |---|---|---|
+   | `DONE` | `none` | Run `npx tsc --noEmit` + `npm run lint` on changed files. Clean → accept. Errors → dispatch Sonnet micro-fix agent |
+   | `DONE_WITH_CONCERNS` | `minor` | Dispatch Sonnet micro-fix agent (sonnet model, inline prompt: "Fix the following lint/tsc errors. Make minimal changes. Reference: {ref-file}. Errors: {lint-output}. Files: {file-list}") |
+   | `DONE_WITH_CONCERNS` | `major` | Dispatch Sonnet full redo agent (sonnet model, same task + reference files + Gemma's written files as context) |
+   | `NEEDS_CONTEXT` | any | Add missing context to task file, re-dispatch to Gemma (once). Second failure → Sonnet full redo |
+   | `BLOCKED` | any | Dispatch Sonnet full redo agent |
+
+7. **Update shared state** on Gemma's behalf: parse `files_changed`, `exports_added`, `notes` from JSON and append to `.shared-state.md`
+
+8. **Log dispatch result** in shared state under `## LLM Dispatch Log`:
+   ```
+   - Task <id> (<description>): GEMMA → <status> [→ SONNET <action>] ✓
+   ```
+
+9. **Clean up**: Delete `.llm-task-<task-id>.txt`
+
 **Hard rules:**
-1. React components (UI) always stay on Claude, even in `claude+codex+llm`. Codex has a documented weakness on React.
+1. React components (UI) always stay on Claude in `claude+codex` profiles. In `claude+ace`, Gemma gets first shot with Sonnet fallback.
 2. Integration tasks always stay on Claude opus. Multi-file reasoning is Claude's strength.
 3. When dispatching Claude agents, always specify the `model` parameter explicitly.
 
@@ -195,12 +262,12 @@ Run graph tools and LLM bash directly — no dedicated agents for these.
 
 **Step A — Check LM Studio (Bash tool, wait for result):**
 
-Profile-gated. Only runs when profile includes `llm`:
+Profile-gated. Only runs when profile includes `llm` or is `claude+ace`:
 
 ```bash
 CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
 case "$CRAFT_PROFILE" in
-  *llm*)
+  *llm*|"claude+ace")
     CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && curl -s --max-time 2 ${LLM_URL:-http://127.0.0.1:1234} > /dev/null 2>&1 && echo "LLM_AVAILABLE:$CRAFT_SCRIPTS" || echo "LLM_UNAVAILABLE"
     ;;
   *)
@@ -209,14 +276,14 @@ case "$CRAFT_PROFILE" in
 esac
 ```
 
-**Step B — Start LLM review in background (if available AND profile includes llm):**
+**Step B — Start LLM review in background (if available AND profile includes llm or ace):**
 
 Skip if Step A returned `LLM_SKIPPED_BY_PROFILE` or `LLM_UNAVAILABLE`. Otherwise run with Bash tool (`run_in_background: true`, timeout 300000ms):
 
 ```bash
 CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
 case "$CRAFT_PROFILE" in
-  *llm*)
+  *llm*|"claude+ace")
     CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
     bash "$CRAFT_SCRIPTS/llm-agent.sh" "Review these files for bugs, missing imports, type mismatches, pattern violations, and DDD boundary violations: [file list from .shared-state.md or graph results]." <project-root>
     bash "$CRAFT_SCRIPTS/llm-unload.sh"
@@ -288,4 +355,5 @@ After a successful build:
 
 1. Delete `.shared-state.md`
 2. Delete `.craft-profile` (if it exists — may be missing when `develop` is invoked standalone)
-3. Report a summary of all changes made, files created/modified, and any decisions worth noting
+3. Delete `.llm-task-*.txt` files (if any remain from Gemma dispatch)
+4. Report a summary of all changes made, files created/modified, and any decisions worth noting
