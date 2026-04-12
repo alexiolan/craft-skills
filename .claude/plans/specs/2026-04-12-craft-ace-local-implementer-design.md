@@ -49,7 +49,7 @@ The key insight: Gemma excels at **self-contained, pattern-driven tasks** when f
 
 | Role | Model | Rationale |
 |---|---|---|
-| Orchestrator, brainstorm, integration | **Opus** | Deep reasoning, cross-file, design decisions |
+| Orchestrator, brainstorm, integration wiring | **Opus** | Deep reasoning, cross-file, design decisions |
 | Spec review | **Gemma** (replaces Opus agent) | Tested excellent at review; free |
 | Plan review | **Gemma** (replaces Sonnet agent) | Tested excellent at review; free |
 | Data layer implementation | **Gemma** | Tested excellent with context files; free |
@@ -106,6 +106,14 @@ Same as `llm-agent.sh` plus one addition:
 | `git_log(path, count)` | Check history | Existing |
 | `git_diff(ref)` | Check changes | Existing |
 
+### Write Safety
+
+The `write_file` tool enforces guardrails:
+- **Path restriction**: Only allows writes under the `working-dir`. Rejects absolute paths or `../` traversal.
+- **Scope restriction**: Only allows writing to paths listed in the task's `files_changed` expectation (from the plan). Writes to unlisted paths return an error to the LLM: `"ERROR: path not in task scope. If this file is necessary, report NEEDS_CONTEXT with the path in your concerns."` The orchestrator treats this as a NEEDS_CONTEXT signal — it can either add the path to the allowed list and re-dispatch, or escalate to Sonnet.
+- **Overwrite guard**: If the target file exists, `write_file` logs a warning to stderr (`WARN: overwriting existing file <path>`) but allows the write. The orchestrator reviews the `git diff --stat` post-check to catch unintended modifications.
+- After all writes, the orchestrator runs `git diff --stat` to verify only expected files were touched before proceeding to lint/tsc.
+
 ### Output Format
 
 The script instructs Gemma to end with a structured STATUS block:
@@ -113,12 +121,18 @@ The script instructs Gemma to end with a structured STATUS block:
 ```
 --- STATUS ---
 status: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
+severity: none | minor | major
 files_changed: ["src/domain/x/data/models/x.ts", "src/domain/x/data/schemas/xSchemas.ts"]
 exports_added: ["TypeX", "CreateXSchema"]
 concerns: none | description of concerns
 notes: optional notes for orchestrator
 --- END STATUS ---
 ```
+
+The `severity` field enables automated routing:
+- `none` — used with DONE status
+- `minor` — styling, naming, non-functional issues → micro-fix agent
+- `major` — wrong pattern, missing logic, structural problems → full redo
 
 ### Status Parsing
 
@@ -127,6 +141,7 @@ The script extracts the STATUS block and outputs JSON matching the existing `cod
 ```json
 {
   "status": "DONE",
+  "severity": "none",
   "summary": "Created notification types and schemas",
   "files_changed": ["path/a.ts", "path/b.ts"],
   "exports_added": ["TypeA", "SchemaB"],
@@ -142,11 +157,16 @@ This allows the develop orchestrator to use identical routing logic for Gemma an
 
 - Total context: 65,536 tokens
 - System prompt + implementer rules: ~2K tokens
-- Reference files (1-2 files): ~3-6K tokens
+- Reference files (max 3 files, max 20K total): ~3-10K tokens
 - Shared state: ~1-2K tokens
 - Task description: ~0.5K tokens
-- **Available for tool use + generation**: ~50K+ tokens
-- Reference files truncated at 8K each if total pre-loaded context exceeds 15K
+- **Available for tool use + generation**: ~45K+ tokens
+
+**Truncation rules:**
+- Each reference file capped at 8K characters
+- Total pre-loaded reference content capped at 20K characters
+- If 3 files exceed 20K combined, the orchestrator drops the least relevant dependency (keeps primary reference + 1 dependency)
+- Shared state capped at 4K characters (older entries trimmed first)
 
 ## 5. Reference File Selection
 
@@ -154,7 +174,7 @@ This allows the develop orchestrator to use identical routing logic for Gemma an
 
 When dispatching a task to Gemma, the orchestrator selects reference files:
 
-1. **Detect task type** from target file path pattern:
+1. **Detect task type** from the plan's **target file path** (the path the task says to create/modify — this is specified in the plan, not discovered from disk):
    - `**/data/models/*.ts` → types/models
    - `**/data/enums/*.ts` → enums
    - `**/data/schemas/*.ts` → schemas
@@ -163,21 +183,23 @@ When dispatching a task to Gemma, the orchestrator selects reference files:
    - `**/feature/**` → UI component
    - `**/data/mappers/*.ts` → mappers
 
-2. **Search graph** for a matching reference:
+2. **Search graph** for a matching existing reference (same file type in a different domain):
    ```
    semantic_search_nodes_tool(task_type_keyword)
-   → filter results by file path glob
+   → filter results by file path glob matching the task type
+   → exclude the target domain (find a reference from a DIFFERENT domain)
    → pick top match as primary reference
    ```
 
-3. **Discover dependencies** of the reference:
+3. **Discover dependencies** of the reference (max 2 levels, max 3 files total):
    ```
    imports_of(reference_file_path)
    → identifies apiService, models, shared utilities
-   → feed key dependencies as additional context
+   → pick at most 2 key dependencies (prioritize: HTTP client > models > utilities)
+   → STOP — do not recurse into dependencies of dependencies
    ```
 
-4. **Feed to Gemma**: primary reference file + 1-2 key dependencies
+4. **Feed to Gemma**: primary reference file + 1-2 key dependencies (max 3 files, max 20K chars total)
 
 ### Glob Fallback
 
@@ -207,13 +229,13 @@ If no graph exists for the target project or graph returns 0 results:
 ```
 Dispatch to Gemma (llm-implement.sh)
     │
-    ├─ DONE → lint/tsc validation
+    ├─ DONE (severity: none) → lint/tsc validation
     │     ├─ Clean → Accept ✓
     │     └─ Errors → Sonnet micro-fix agent
     │
-    ├─ DONE_WITH_CONCERNS → Read concerns
-    │     ├─ Minor (styling, naming) → Sonnet micro-fix agent
-    │     └─ Major (wrong pattern, missing logic) → Sonnet full redo
+    ├─ DONE_WITH_CONCERNS (severity: minor) → Sonnet micro-fix agent
+    │
+    ├─ DONE_WITH_CONCERNS (severity: major) → Sonnet full redo
     │
     ├─ NEEDS_CONTEXT → Provide info, re-dispatch to Gemma (once)
     │     ├─ Second attempt succeeds → Accept ✓
@@ -222,12 +244,20 @@ Dispatch to Gemma (llm-implement.sh)
     └─ BLOCKED → Sonnet full redo
 ```
 
-### Sonnet Fallback Details
+### Sonnet Micro-Fix Agent
 
-When Sonnet takes over:
-- Receives the **same task description** and reference files
+A lightweight Sonnet agent dispatched for minor issues (lint errors, naming, small pattern deviations):
+- Receives: the specific file(s) Gemma wrote + the lint/tsc error output + one-line fix instruction + the primary reference file (for pattern context)
+- Prompt: "Fix the following errors in this file. Do not rewrite the file — make minimal targeted changes. Use the reference file to understand the expected patterns."
+- Does NOT receive the full task description or shared state (unnecessary for small fixes)
+- Expected to complete in a single pass
+
+### Sonnet Full Redo
+
+A standard Sonnet implementation agent dispatched when Gemma's output is fundamentally wrong:
+- Receives the **same task description** and reference files as Gemma got
 - Also receives **Gemma's written files** as additional context (learns from the attempt)
-- Uses the standard Claude Agent dispatch (not `llm-implement.sh`)
+- Uses the standard Claude Agent dispatch with `implementer-prompt.md`
 - Produces files directly (no STATUS block parsing needed)
 
 ### Dispatch Log
@@ -285,12 +315,13 @@ The develop skill detects `llm-impl` in the profile:
 ```bash
 CRAFT_PROFILE=$(cat "$PROJECT_ROOT/.craft-profile" 2>/dev/null || echo "claude")
 
+# Exact profile matching — no substring wildcards
 case "$CRAFT_PROFILE" in
-  *llm-impl*)
+  "claude+llm-impl")
     LLM_IMPL_ENABLED=1
     LLM_REVIEW_ENABLED=1
     ;;
-  *llm*)
+  "claude+llm"|"claude+codex+llm")
     LLM_IMPL_ENABLED=0
     LLM_REVIEW_ENABLED=1
     ;;
@@ -303,14 +334,44 @@ esac
 
 When `LLM_IMPL_ENABLED=1`:
 - ALL implementation tasks routed to `llm-implement.sh` first
-- Integration tasks still go to Opus agent (hardcoded exception)
+- **Integration wiring** tasks still go to Opus agent (hardcoded exception)
 - Fallback to Sonnet on DONE_WITH_CONCERNS (major), NEEDS_CONTEXT (2nd fail), or BLOCKED
+
+### Integration vs Data Layer Boundary
+
+The orchestrator classifies tasks by their **target file path**, not by conceptual role:
+
+| Target file pattern | Classification | Executor |
+|---|---|---|
+| `**/data/models/*.ts` | Data layer | Gemma |
+| `**/data/enums/*.ts` | Data layer | Gemma |
+| `**/data/schemas/*.ts` | Data layer | Gemma |
+| `**/data/infrastructure/*Service.ts` | Data layer | Gemma |
+| `**/data/queries/*Queries.ts` | Data layer | Gemma |
+| `**/data/mappers/*.ts` | Data layer | Gemma |
+| `**/feature/**` | UI component | Gemma → Sonnet fallback |
+| `**/ui/**` | UI component | Gemma → Sonnet fallback |
+| Route registration, layout wiring, provider setup | Integration wiring | Opus agent |
+| Tasks the plan explicitly marks as "integration" | Integration wiring | Opus agent |
+
+**Classification rules:**
+1. **Primary rule**: Classification is determined by **target file path pattern** (the table above).
+2. **Integration override**: The plan may explicitly mark a task as "integration" regardless of file path — the orchestrator respects this.
+3. **Multi-file tasks**: If a plan step lists multiple target files (e.g., model + schema), the orchestrator dispatches them as **one Gemma task** if all files are within the same domain and layer (e.g., both under `data/`). If files span different layers (e.g., `data/` + `feature/`), the orchestrator splits into sub-tasks before dispatch.
+4. **Query hooks** (`*Queries.ts`) are classified as **data layer**, not integration, because they follow a rigid factory pattern with a single service dependency.
+5. **Integration wiring** is reserved for tasks that connect multiple domains or layers together (e.g., adding a route, wiring a provider, composing multiple domain hooks in a page).
 
 ## 9. Implementation Notes
 
-- All `llm-*.sh` scripts currently default `LLM_MODEL` to `qwen/qwen3.5-35b-a3b`. The new `llm-implement.sh` must default to `google/gemma-4-26b-a4b`. Existing scripts should also be updated to the new default as part of this work.
-- The `llm-check.sh` model detection (`grep -c "qwen3.5-35b-a3b"`) must be updated to detect Gemma instead.
-- The `llm-agent.sh` auto-load logic (context length reload check) grep pattern must also be updated.
+### Model Configuration Refactor
+
+All `llm-*.sh` scripts currently hardcode `qwen/qwen3.5-35b-a3b` as the default model. This must be refactored:
+
+- **Single source of truth**: Create `scripts/llm-config.sh` that exports `LLM_MODEL`, `LLM_URL`, and `LLM_CONTEXT_LENGTH` as defaults. All other `llm-*.sh` scripts source this file.
+- **Default model**: `google/gemma-4-26b-a4b`
+- **Model detection**: Replace all `grep -c "qwen3.5-35b-a3b"` patterns with `grep -c "$LLM_MODEL"` — detect based on the configured model variable, not a hardcoded string.
+- **Auto-load logic**: `lms load "$LLM_MODEL" -c "$LLM_CONTEXT_LENGTH"` — uses variables, not hardcoded values.
+- **Override**: Users can still set `LLM_MODEL` env var to use a different model without editing scripts.
 
 ## 10. Prerequisites
 
@@ -330,6 +391,8 @@ When `LLM_IMPL_ENABLED=1`:
 | LM Studio not running | Low | High (blocks pipeline) | `llm-check.sh` + loud fail |
 | Unparseable STATUS block | Very low | Low | Treat as DONE_WITH_CONCERNS → Sonnet validation |
 | Gemma quality degrades on future model updates | Low | Medium | Model pinned in config; test before upgrading |
+| Gemma writes to unexpected file paths | Very low | High | `write_file` tool restricts to task's expected paths + `git diff --stat` post-check |
+| Model string detection breaks on version change | Medium | Medium | `llm-config.sh` single source of truth; no hardcoded model strings in other scripts |
 
 ## 12. Cost Model
 
