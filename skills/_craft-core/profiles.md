@@ -10,6 +10,7 @@ This file is the authoritative reference for profile definitions. Read by wrappe
 | `claude+codex` | yes | yes | no | `/craft-duo` |
 | `claude+llm` | yes | no | yes | `/craft-local` |
 | `claude+codex+llm` | yes | yes | yes | `/craft-squad` |
+| `claude+ace` | yes | no | yes (impl + review) | `/craft-ace` |
 
 ## `.craft-profile` file
 
@@ -40,6 +41,12 @@ esac
 case "$CRAFT_PROFILE" in
   *llm*) LLM_ENABLED=1 ;;
   *)     LLM_ENABLED=0 ;;
+esac
+
+# Does the profile include ace (LLM implementation)?
+case "$CRAFT_PROFILE" in
+  "claude+ace") ACE_ENABLED=1 ;;
+  *)            ACE_ENABLED=0 ;;
 esac
 ```
 
