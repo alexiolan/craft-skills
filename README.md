@@ -22,6 +22,34 @@ Replaces generic AI workflows with battle-tested, structured processes: collabor
 > git -C ~/.claude/plugins/marketplaces/craft-skills pull --ff-only
 > ```
 
+## Quick Start
+
+Once installed, craft-skills activates automatically. Just describe what you want to build:
+
+```
+/craft Add a user notifications system
+```
+
+**What happens:**
+
+1. **Brainstorm** — Claude explores your codebase, asks clarifying questions one at a time, proposes 2-3 approaches, and collaborates with you on a design
+2. **Plan** — Creates a detailed implementation plan with exact file paths, task ordering, and parallel/sequential dependencies
+3. **Develop** — Dispatches parallel developer agents, each implementing one task. Agents share state and coordinate via a shared-state file
+4. **Test** — Runs browser tests against the implemented feature
+5. **Report** — Summarizes what was built, decisions made, and any open items
+
+You approve or redirect at every phase — nothing runs without your sign-off.
+
+**Other entry points:**
+
+```
+/implement Add a logout button          # Skip brainstorm, go straight to plan → develop
+/architect 03                            # Plan only (reads .claude/prompts/03-*.md)
+/debug The API returns 500 on save       # Investigate before fixing — no guessing
+/simplify                                # Review recent changes for quality
+/reflect project                         # Audit your Claude configs
+```
+
 ## Skills
 
 ### Pipeline Skills (Craft Variants)
@@ -36,185 +64,75 @@ All craft variants share the same pipeline: **Brainstorm → Plan → Develop �
 | **craft-local** | Claude (Sonnet) | Claude + Gemma | LM Studio |
 | **craft-squad** | Claude + Codex (GPT-5) | Claude + Gemma | Codex CLI + LM Studio |
 
-See [Choosing a Variant](#choosing-a-variant) in the Benchmarks section for detailed comparison with real performance data.
+See [Choosing a Variant](#choosing-a-variant) for detailed comparison with real benchmark data.
 
-### Shortcut Pipeline Skills
+### Shortcut Skills
 
 | Skill | Description |
 |---|---|
 | **implement** | Fast pipeline: architect → develop → test. For clear, well-understood requirements. |
 | **finalize** | Post-plan pipeline: develop → test. Use when a plan already exists. |
+| **architect** | Create an implementation plan. No code written. |
+| **develop** | Execute an approved plan using parallel agents. |
+| **browser-test** | Run parallel browser-based UI tests. |
 
 ### Process Skills
 
 | Skill | Description |
 |---|---|
-| **architect** | Analyze requirements and create a detailed implementation plan. No code written. |
-| **develop** | Execute an approved plan using parallel agents with shared state coordination. |
-| **browser-test** | Plan and run parallel browser-based UI tests using multiple agents. |
 | **debug** | Systematic root-cause investigation before attempting any fix. |
-| **simplify** | Review changed code for reuse opportunities, quality, and architecture compliance. |
-| **reflect** | Self-improvement: audit project configs, maintain skill health, sync upstream. |
-| **llm-review** | Run a local LLM review on files. Auto-loads/unloads model. |
-| **graph-explore** | Explore codebase structure using the code-review-graph knowledge graph. |
+| **simplify** | Review changed code for reuse opportunities and architecture compliance. |
+| **reflect** | Audit project configs, maintain skill health, sync upstream. |
 
-### System Skills
+## Getting Started
 
-| Skill | Description |
-|---|---|
-| **bootstrap** | Loaded at SessionStart. Establishes skill awareness and auto-trigger rules. |
+### 1. Set up your project's CLAUDE.md
 
-## How It Works
+craft-skills reads your project's `CLAUDE.md` to understand your tech stack, architecture, and conventions. Use the setup prompts to generate one:
 
-### Automatic triggering
-
-The bootstrap skill loads at every session start and watches for trigger conditions:
-
-- "Add a reviews module" → triggers **craft** or **implement**
-- "The API returns 500 after saving" → triggers **debug**
-- "Audit the Claude configs" → triggers **reflect**
-
-### Manual invocation
-
+**Frontend project:**
 ```
-/craft Add a notification preferences page
-/craft-ace Build a reporting dashboard
-/implement 15
-/debug The API returns 500 on save
-/reflect project
+Read craft-skills/prompts/frontend/migration-prompt.md
 ```
 
-### Input types
-
-Pipeline skills accept three input formats:
-
-- **Prompt file number**: `/craft 15` reads `.claude/prompts/15-*.md`
-- **Direct text**: `/implement Add a logout button`
-- **Empty**: auto-detects recent plans or asks for input
-
-## How craft-ace Works
-
-`craft-ace` is the cost-optimized variant where a local LLM (Gemma 4 26B) handles implementation and reviews, while Claude Opus orchestrates.
-
-**Role split:**
-
-| Role | Model | Cost |
-|---|---|---|
-| Orchestrator, brainstorm, integration | Opus | Paid |
-| Spec & plan reviews (up to 4 rounds each) | Gemma | Free |
-| Data layer implementation (types, services, schemas, queries) | Gemma | Free |
-| UI component implementation | Gemma first, Sonnet fallback | Mostly free |
-| Post-develop review | Gemma | Free |
-
-**How Gemma implements code:**
-1. Orchestrator selects reference files from the codebase (via knowledge graph or glob)
-2. `llm-implement.sh` sends the task + reference files to Gemma
-3. Gemma writes files using a `write_file` tool (scope-restricted, atomic writes)
-4. Returns structured JSON status (DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED)
-5. If Gemma fails, Sonnet takes over with Gemma's attempt as additional context
-
-## Architecture
-
+**Backend project:**
 ```
-craft-skills/
-├── .claude-plugin/
-│   ├── plugin.json              # Plugin manifest
-│   └── marketplace.json         # GitHub marketplace definition
-├── skills/
-│   ├── _craft-core/             # Shared pipeline logic
-│   │   ├── core.md              # Pipeline phases
-│   │   ├── profiles.md          # Executor profile definitions
-│   │   ├── codex-executor.md    # Codex invocation guide
-│   │   └── llm-gating.md       # LLM step gating rules
-│   ├── craft/SKILL.md           # Base craft pipeline
-│   ├── craft-ace/SKILL.md       # Local LLM implementer variant
-│   ├── craft-duo/SKILL.md       # Codex co-executor variant
-│   ├── craft-local/SKILL.md     # Local LLM review variant
-│   ├── craft-squad/SKILL.md     # All three agents variant
-│   ├── implement/SKILL.md
-│   ├── finalize/SKILL.md
-│   ├── architect/
-│   │   ├── SKILL.md
-│   │   └── architect-prompt.md
-│   ├── develop/
-│   │   ├── SKILL.md
-│   │   ├── implementer-prompt.md
-│   │   └── codex-prompt.md
-│   ├── browser-test/
-│   │   ├── SKILL.md
-│   │   └── tester-prompt.md
-│   ├── debug/SKILL.md
-│   ├── simplify/SKILL.md
-│   ├── reflect/SKILL.md
-│   ├── llm-review/
-│   │   ├── SKILL.md
-│   │   └── dispatch-prompt.md
-│   ├── graph-explore/
-│   │   ├── SKILL.md
-│   │   └── dispatch-prompt.md
-│   └── bootstrap/SKILL.md
-├── scripts/
-│   ├── llm-config.sh            # Shared LLM defaults + llm_ensure_loaded()
-│   ├── llm-implement.sh         # LLM implementation agent (write_file + STATUS)
-│   ├── llm-agent.sh             # LLM exploration agent (read-only tools)
-│   ├── llm-review.sh            # Single file review with thinking mode
-│   ├── llm-analyze.sh           # Multi-file analysis
-│   ├── llm-check.sh             # Availability check + auto-load
-│   ├── llm-unload.sh            # Unload model from RAM
-│   ├── codex-dispatch.sh        # Codex task dispatcher
-│   ├── codex-status-schema.json # JSON schema for task status
-│   ├── sync-agents-md.sh        # Generate AGENTS.md from CLAUDE.md
-│   └── sync-check.sh            # Upstream sync verification
-├── hooks/
-│   ├── hooks.json               # SessionStart hook config
-│   └── session-start            # Bootstrap injection script
-├── references/
-│   ├── superpowers-sync.md      # Upstream sync tracking
-│   ├── form-field-patterns.md   # TanStack Form + Zod reference
-│   ├── daisyui-portal-patterns.md # Portal/overflow solutions
-│   └── vitest-setup.md          # Test setup reference
-├── prompts/
-│   ├── frontend/
-│   │   ├── migration-prompt.md  # Migrate frontend projects
-│   │   └── new-project-prompt.md # Initialize new frontend projects
-│   └── backend/
-│       ├── migration-prompt.md  # Migrate backend projects
-│       └── new-project-prompt.md # Initialize new backend projects
-└── package.json
+Read craft-skills/prompts/backend/migration-prompt.md
 ```
 
-## Project Setup
+**New project:**
+```
+Read craft-skills/prompts/frontend/new-project-prompt.md
+Read craft-skills/prompts/backend/new-project-prompt.md
+```
 
-craft-skills is designed to work with an optional parent-level CLAUDE.md that holds shared conventions, while each project keeps only project-specific configuration:
+**Any other project** — create `.claude/CLAUDE.md` manually describing your:
+- Module/package structure and boundaries
+- Development commands (build, test, lint)
+- Architecture conventions and patterns
+- Environment configuration
+
+### 2. Optional: parent CLAUDE.md for multi-project workspaces
+
+If you have multiple projects sharing conventions, put shared rules in a parent CLAUDE.md:
 
 ```
 workspace/
 ├── .claude/
 │   └── CLAUDE.md              # Shared: architecture rules, patterns, conventions
-├── craft-skills/              # This plugin
 ├── project-a/
 │   └── .claude/CLAUDE.md      # Project-specific: modules, routes, env vars
 └── project-b/
     └── .claude/CLAUDE.md      # Project-specific: modules, routes, env vars
 ```
 
-### Migrating an existing project
+### 3. Start building
 
-Use the appropriate migration prompt in a Claude Code session within the project:
+```
+/craft Add a pricing calculator
+```
 
-- **Frontend**: Read `craft-skills/prompts/frontend/migration-prompt.md`
-- **Backend**: Read `craft-skills/prompts/backend/migration-prompt.md`
-
-Paste content as input — the agent analyzes the codebase and creates a project-specific CLAUDE.md.
-
-### Setting up a new project
-
-Use the appropriate new project prompt:
-
-- **Frontend**: Read `craft-skills/prompts/frontend/new-project-prompt.md`
-- **Backend**: Read `craft-skills/prompts/backend/new-project-prompt.md`
-
-Paste content as input — the agent asks questions and scaffolds the configuration.
+That's it. The skills handle the rest — reading your CLAUDE.md, exploring your codebase, coordinating agents, and verifying the output.
 
 ## Optional Integrations
 
@@ -222,47 +140,31 @@ craft-skills detects and uses these when available. Nothing breaks without them 
 
 ### Local LLM (via LM Studio)
 
-Required by `craft-ace`, `craft-local`, and `craft-squad`. Optional for all other skills.
-
-**Setup:**
+Required by `craft-ace`, `craft-local`, and `craft-squad`.
 
 1. Install [LM Studio](https://lmstudio.ai) and download `google/gemma-4-26b-a4b` (8-bit quantization)
-2. Start the local server in LM Studio (Local Server → Start)
+2. Start the local server (Local Server → Start)
 
-Scripts auto-detect LM Studio, load the model, and unload when done. All scripts source `llm-config.sh` for defaults. Override with env vars:
+Scripts auto-detect LM Studio, load the model, and unload when done. Override defaults with env vars:
 
 ```bash
 LLM_MODEL="your/model-id" LLM_URL="http://localhost:1234" /craft-ace
 ```
 
-| Script | Purpose |
-|---|---|
-| `llm-config.sh` | Shared defaults (model, URL, context length) + `llm_ensure_loaded()` |
-| `llm-implement.sh` | Implementation agent with `write_file` tool. Returns structured JSON status. |
-| `llm-agent.sh` | Exploration agent with read-only file tools |
-| `llm-review.sh` | Single file review with thinking mode |
-| `llm-analyze.sh` | Multi-file analysis with thinking mode |
-| `llm-check.sh` | Availability check + model auto-load |
-| `llm-unload.sh` | Unload all models from RAM |
-
 ### Codex CLI (via OpenAI)
 
-Required by `craft-duo` and `craft-squad`. Not used by other variants.
-
-**Setup:**
+Required by `craft-duo` and `craft-squad`.
 
 ```bash
 npm i -g @openai/codex
 codex login
 ```
 
-Codex handles data-layer implementation tasks (types, services, queries, schemas) while Claude handles UI and integration. Uses your account's default model (GPT-5 with ChatGPT auth, or specify `codex-mini`/`gpt-5-codex` with API key auth). `AGENTS.md` is auto-generated from your `CLAUDE.md` so Codex inherits project conventions.
+Codex handles data-layer tasks (types, services, queries) while Claude handles UI and integration. Uses your account's default model (GPT-5 with ChatGPT auth, or specify `codex-mini`/`gpt-5-codex` with API key auth). `AGENTS.md` is auto-generated from your `CLAUDE.md` so Codex inherits project conventions.
 
-### Code review graph (via code-review-graph plugin)
+### Code review graph
 
-Builds a structural knowledge graph of your codebase with Tree-sitter. Provides blast-radius analysis, semantic search, and import/export relationship queries.
-
-**Setup:**
+Builds a structural knowledge graph of your codebase with Tree-sitter. Provides blast-radius analysis, semantic search, and dependency queries.
 
 ```bash
 pip install code-review-graph
@@ -270,64 +172,13 @@ code-review-graph install
 code-review-graph build
 ```
 
-**Used in:**
-- `craft` / `craft-ace` — codebase exploration during brainstorming
-- `craft-ace` — reference file selection for Gemma (graph finds the best pattern-match files)
-- `develop` — post-develop review (identifies high-risk changed files)
-
 ### UI/UX review (via ui-ux-pro-max skill)
 
-Reviews spec UI sections — component layouts, interaction patterns, form design, error states, loading states, and accessibility — before implementation begins.
-
-**Used in:** `craft` (spec review phase, step 1.8)
-
-## Methodology
-
-craft-skills absorbs proven workflows from [superpowers](https://github.com/obra/superpowers) and adds architecture-specific layers:
-
-| From superpowers | Absorbed into | What was kept |
-|---|---|---|
-| brainstorming | craft | Business requirement exploration, one-question-at-a-time, 2-3 approaches |
-| writing-plans | craft + architect | Bite-sized tasks, no placeholders, complete code in every step |
-| subagent-driven-development | develop | Fresh agent per task, two-stage review |
-| verification-before-completion | all skills | Iron law: no completion claims without evidence |
-| systematic-debugging | debug | Four-phase investigation before fixing |
-
-The `reflect evolve` mode checks the superpowers repo for useful upstream changes and proposes adaptations.
-
-## Using with Different Stacks
-
-craft-skills is stack-agnostic. The skills describe **process** (how to brainstorm, plan, develop, test, debug) — not technology. Your project's CLAUDE.md provides the technology context.
-
-### Frontend (React, Next.js, Vue, etc.)
-
-Use the frontend setup prompts:
-```
-Read craft-skills/prompts/frontend/migration-prompt.md
-Read craft-skills/prompts/frontend/new-project-prompt.md
-```
-
-### Backend (Python, Go, Java, Node.js, etc.)
-
-Use the backend setup prompts:
-```
-Read craft-skills/prompts/backend/migration-prompt.md
-Read craft-skills/prompts/backend/new-project-prompt.md
-```
-
-### Any other project
-
-Create a `.claude/CLAUDE.md` that describes your project's:
-- Module/package structure and boundaries
-- Development commands (build, test, lint)
-- Architecture conventions and patterns
-- Environment configuration
-
-craft-skills reads your CLAUDE.md and adapts its workflows accordingly. No special configuration needed — just invoke `/craft`, `/implement`, or `/debug` as usual.
+Reviews spec UI sections — layouts, interactions, form design, error states, accessibility — before implementation begins. Used in `craft` (spec review phase).
 
 ## Benchmarks
 
-Real-world benchmark: implementing a complete domain (types, service, query hooks, UI component — 10 files) on a mid-size DDD project. Same feature, same plan, each variant in an isolated git worktree.
+Real-world benchmark: implementing a complete module (types, service, query hooks, UI component — 10 files, 170 LOC) on a mid-size project. Same feature, same plan, each variant in an isolated git worktree.
 
 ### Results
 
@@ -339,13 +190,12 @@ Real-world benchmark: implementing a complete domain (types, service, query hook
 | **Build pass** | Yes | Yes | Yes | Yes |
 | **Data layer executor** | Claude Sonnet | Gemma (local) | Codex (GPT-5) | Codex (GPT-5) |
 | **UI executor** | Claude Sonnet | Gemma + Sonnet fallback | Claude Sonnet | Claude Sonnet |
-| **Review executor** | — | Gemma (local) | — | Gemma (local) |
 | **Codex tasks** | — | — | 3/3 clean | 3/3 clean |
 | **Gemma tasks** | — | 2/4 clean | — | review only |
 
 ### Delegation Ratio
 
-The benchmark feature produces 170 lines of code across 10 files. Here's how the work is distributed across executors:
+How the 170 lines of code are distributed across executors:
 
 | Task | LOC | craft | craft-ace | craft-duo | craft-squad |
 |---|---|---|---|---|---|
@@ -357,64 +207,115 @@ The benchmark feature produces 170 lines of code across 10 files. Here's how the
 | **Claude LOC** | | **170 (100%)** | **4 (2%)** | **78 (46%)** | **78 (46%)** |
 | **Delegated LOC** | | **0** | **166 (98%)** | **92 (54%)** | **92 (54%)** |
 
-**Claude API tokens (orchestrator):**
+### Claude Token Economy
 
 | | craft | craft-ace | craft-duo | craft-squad |
 |---|---|---|---|---|
-| **Tokens** | 24,606 | 38,572 | 61,779 | 45,137 |
-| **Of which: implementation** | ~24K | ~4K | ~30K | ~25K |
-| **Of which: orchestration overhead** | ~1K | ~35K | ~32K | ~20K |
+| **Total Claude tokens** | 24,606 | 38,572 | 61,779 | 45,137 |
+| **Implementation tokens** | ~24K | ~4K | ~30K | ~25K |
+| **Orchestration overhead** | ~1K | ~35K | ~32K | ~20K |
 
-> Orchestration overhead includes: reading reference files, writing dispatch prompts, parsing JSON output, running verification. This overhead is the "cost" of delegation — ace/duo/squad spend Claude tokens coordinating external executors instead of writing code directly.
+| Variant | Claude implementation savings | Quality |
+|---|---|---|
+| **craft** | Baseline | 1 fix iteration |
+| **craft-ace** | **~83% fewer** | 2 fix iterations (minor) |
+| **craft-duo** | ~0%* | 0 fix iterations |
+| **craft-squad** | ~0%* | 0 fix iterations + review |
 
-**Net Claude token economy vs baseline:**
+*\* duo/squad use more total Claude tokens due to orchestration overhead. The savings come from Codex tokens being cheaper and from parallelization on larger features.*
 
-| Variant | Claude implementation tokens | Savings vs craft | Quality |
-|---|---|---|---|
-| **craft** | ~24K (baseline) | — | 1 fix iteration |
-| **craft-ace** | ~4K | **~83% fewer** | 2 fix iterations (minor) |
-| **craft-duo** | ~30K | **~0% fewer*** | 0 fix iterations |
-| **craft-squad** | ~25K | **~0% fewer*** | 0 fix iterations + review |
+### How craft-ace Achieves 83% Savings
 
-*\* craft-duo and craft-squad use MORE total Claude tokens than baseline due to orchestration overhead (Codex prompt generation, AGENTS.md sync, JSON parsing). The savings come from Codex/OpenAI tokens being cheaper than Claude tokens, and from parallelization potential on larger features.*
+`craft-ace` offloads implementation and reviews to a local LLM (Gemma 4 26B), keeping Claude for orchestration only:
 
-### Observations
+| Role | Model | Cost |
+|---|---|---|
+| Orchestrator, brainstorm, integration | Claude Opus | Paid |
+| Spec and plan reviews (up to 4 rounds) | Gemma | Free |
+| Data layer implementation | Gemma | Free |
+| UI component implementation | Gemma first, Sonnet fallback | Mostly free |
+| Post-develop review | Gemma | Free |
 
-**craft (baseline):** Fastest and most token-efficient. Claude generates everything in one pass. Best for speed and simplicity.
+**How it works:** The orchestrator selects reference files from the codebase (via knowledge graph or glob), `llm-implement.sh` sends the task + references to Gemma, Gemma writes files using a scope-restricted `write_file` tool, and returns structured JSON status. If Gemma fails, Sonnet takes over with Gemma's attempt as context.
 
-**craft-ace:** Biggest Claude API savings — Gemma handles 98% of code generation locally for free. Claude only writes trivial barrel exports and orchestrates. Trade-off: 6x slower wall time (local inference) and 2 minor fixes needed. Best for cost-conscious development.
-
-**craft-duo:** Codex (GPT-5) handled data layer perfectly — 3/3 dispatches clean with zero fixes. But orchestration overhead means total Claude tokens are comparable to baseline. The real benefit is on larger features where Codex tasks run in parallel with Claude UI tasks, reducing wall time.
-
-**craft-squad:** Combines Codex implementation + Gemma review. Gemma's review found only false positives on this feature. Most valuable on complex features where an independent review catches real issues.
+**Trade-off:** ~6x slower wall time (local inference + model cold start) and occasional minor fixes needed (hallucinated names, import ordering). Best for cost-conscious development across multiple features.
 
 ### Choosing a Variant
 
 | Variant | Best for | Trade-offs | Requirements |
 |---|---|---|---|
-| **craft** | Day-to-day development. Fast iteration, quick features, bug fixes. You want the simplest and most reliable path. | Fastest (2-3 min). All tokens go to Claude — no delegation overhead, no external dependencies to break. Slight quality variance (1 fix iteration typical). | None |
-| **craft-ace** | Cost-conscious development. You're building multiple features and want to minimize Claude API spend. Good for data-heavy domains with lots of types/services. | Biggest savings (~83% fewer Claude implementation tokens). Gemma handles 98% of code generation locally for free. Trade-off: 6x slower wall time due to local inference, and occasional minor fixes needed (hallucinated names, import ordering). | LM Studio + Gemma model |
-| **craft-duo** | Large features where parallelism matters. Codex runs data-layer tasks while Claude handles UI simultaneously. Best when you have 10+ tasks and want wall-time reduction. | Codex produces clean code (0 fix iterations), but orchestration overhead means no Claude token savings on small features. Real benefit appears at scale. | Codex CLI |
-| **craft-local** | Deeper review without changing who implements. Same as craft, but with Gemma reviewing specs, plans, and post-develop code. Good when stakes are high. | Adds ~30% wall time for review passes. No cost savings — quality investment. | LM Studio + Gemma model |
-| **craft-squad** | Maximum coverage on critical features. All three AIs contribute: Codex implements data layer, Claude handles UI, Gemma reviews everything. | Most thorough but slowest (7-8 min). Gemma review may produce false positives on simple features — more valuable on complex ones. | Codex CLI + LM Studio |
+| **craft** | Day-to-day development. Fast iteration, quick features, bug fixes. Simplest and most reliable. | Fastest (2-3 min). No external dependencies. Slight quality variance (1 fix iteration typical). | None |
+| **craft-ace** | Cost-conscious development. Multiple features, data-heavy work. | ~83% fewer Claude tokens. 6x slower wall time. Occasional minor fixes. | LM Studio + Gemma |
+| **craft-duo** | Large features where parallelism matters. 10+ tasks, want wall-time reduction. | Codex produces clean code, but orchestration overhead offsets token savings on small features. | Codex CLI |
+| **craft-local** | High-stakes features. Same as craft + Gemma reviewing specs, plans, and code. | +30% wall time for review passes. No cost savings — quality investment. | LM Studio + Gemma |
+| **craft-squad** | Maximum coverage on critical features. All three AIs contribute. | Most thorough but slowest. Gemma review may flag false positives on simple features. | Codex CLI + LM Studio |
 
 **Decision flowchart:**
 
 ```
 Need to build something?
-  → Is it a quick fix or small feature?     → craft
-  → Is it a large feature?
-      → Do you have LM Studio?
+  → Quick fix or small feature?              → craft
+  → Large feature?
+      → Have LM Studio?
           → Want to save money?              → craft-ace
           → Want deeper review?              → craft-local
-      → Do you have Codex CLI?
+      → Have Codex CLI?
           → Want parallel execution?         → craft-duo
-      → Have both?
-          → High stakes, want everything?    → craft-squad
+      → Have both? High stakes?              → craft-squad
   → Not sure?                                → craft (always works)
 ```
 
-> **Note:** Benchmarks represent a single run on one feature type (10-file domain with 170 LOC). Results vary by feature complexity — larger features with more data-layer tasks show greater delegation benefits. All variants include graceful fallback — if an external service is unavailable, tasks automatically fall back to Claude.
+> Benchmarks represent a single run on one feature type. Results vary by feature complexity — larger features with more data-layer tasks show greater delegation benefits. All variants include graceful fallback: if an external service is unavailable, tasks automatically fall back to Claude.
+
+## Architecture
+
+<details>
+<summary>Directory structure (click to expand)</summary>
+
+```
+craft-skills/
+├── skills/
+│   ├── _craft-core/             # Shared pipeline logic (profiles, gating, executors)
+│   ├── craft/SKILL.md           # Base craft pipeline
+│   ├── craft-ace/SKILL.md       # Local LLM implementer variant
+│   ├── craft-duo/SKILL.md       # Codex co-executor variant
+│   ├── craft-local/SKILL.md     # Local LLM review variant
+│   ├── craft-squad/SKILL.md     # All three agents variant
+│   ├── implement/SKILL.md       # Fast pipeline (architect → develop → test)
+│   ├── finalize/SKILL.md        # Post-plan pipeline (develop → test)
+│   ├── architect/               # Planning (SKILL.md + architect-prompt.md)
+│   ├── develop/                 # Execution (SKILL.md + implementer-prompt.md + codex-prompt.md)
+│   ├── browser-test/            # Testing (SKILL.md + tester-prompt.md)
+│   ├── debug/SKILL.md
+│   ├── simplify/SKILL.md
+│   ├── reflect/SKILL.md
+│   ├── llm-review/              # Local LLM review reference
+│   ├── graph-explore/           # Knowledge graph reference
+│   └── bootstrap/SKILL.md       # SessionStart auto-trigger
+├── scripts/                     # LLM and Codex dispatch scripts
+├── hooks/                       # SessionStart hook
+├── prompts/
+│   ├── frontend/                # Frontend migration + setup prompts
+│   └── backend/                 # Backend migration + setup prompts
+├── references/                  # Tech-specific reference docs
+└── package.json
+```
+
+</details>
+
+### Methodology
+
+craft-skills absorbs proven workflows from [superpowers](https://github.com/obra/superpowers):
+
+| From superpowers | Used in | What was kept |
+|---|---|---|
+| brainstorming | craft | One-question-at-a-time, 2-3 approaches, incremental validation |
+| writing-plans | craft + architect | Bite-sized tasks, no placeholders, complete code in every step |
+| subagent-driven-development | develop | Fresh agent per task, two-stage review |
+| verification-before-completion | all skills | No completion claims without evidence |
+| systematic-debugging | debug | Four-phase investigation before fixing |
+
+The `reflect evolve` mode checks the superpowers repo for useful upstream changes and proposes adaptations.
 
 ## License
 
