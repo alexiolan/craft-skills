@@ -1,6 +1,6 @@
 {
   "name": "craft-skills",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "type": "module",
   "description": "DDD-first frontend development skills for Next.js projects",
   "scripts": {

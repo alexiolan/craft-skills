@@ -6,8 +6,6 @@ Replaces generic AI workflows with battle-tested, domain-driven processes: colla
 
 ## Installation
 
-### From GitHub marketplace
-
 ```
 /plugin marketplace add alexiolan/craft-skills
 /plugin install craft-skills@craft-skills
@@ -29,25 +27,30 @@ Configure git to use the project's hooks directory for automatic version bumping
 git config core.hooksPath .githooks
 ```
 
-### Updating in consuming projects
-
-Due to a [known Claude Code bug](https://github.com/anthropics/claude-code/issues/37252), `plugin update` doesn't fetch the latest version automatically. Run this to update:
-
-```bash
-git -C ~/.claude/plugins/marketplaces/craft-skills pull --ff-only && claude plugin update craft-skills@craft-skills --scope project
-```
-
 ## Skills
 
-### Pipeline Skills
+### Pipeline Skills (Craft Variants)
+
+All craft variants share the same pipeline: **Brainstorm → Plan → Develop → Test → Report**. They differ in which models handle each phase:
+
+| Skill | Who implements | Who reviews | Requirements | Cost savings |
+|---|---|---|---|---|
+| **craft** | Claude (Sonnet) | Claude (Opus/Sonnet) | None | Baseline |
+| **craft-ace** | Gemma (local LLM) | Gemma (review loops) | LM Studio | ~45-60% |
+| **craft-duo** | Claude + Codex | Claude (Opus/Sonnet) | Codex CLI | ~15-20% |
+| **craft-local** | Claude (Sonnet) | Claude + Gemma | LM Studio | ~0% (quality boost) |
+| **craft-squad** | Claude + Codex | Claude + Gemma | Codex CLI + LM Studio | ~15-20% |
+
+**Choosing a variant:**
+- **No external deps?** Use `craft`
+- **Want cost savings?** Use `craft-ace` (requires LM Studio with Gemma)
+- **Want deeper review?** Use `craft-local` (requires LM Studio)
+- **Have Codex CLI?** Use `craft-duo` or `craft-squad`
+
+### Shortcut Pipeline Skills
 
 | Skill | Description |
 |---|---|
-| **craft** | Full pipeline: brainstorm → plan → develop → test. Claude only, no external deps. |
-| **craft-ace** | Craft with local Gemma as implementer + reviewer. Opus orchestrates, Sonnet fallback. ~45-60% cost savings. Requires LM Studio. |
-| **craft-duo** | Craft with Codex as co-executor for data-layer tasks. Requires Codex CLI. |
-| **craft-local** | Craft with LM Studio LLM reviews. Deeper review, no implementation delegation. Requires LM Studio. |
-| **craft-squad** | Craft with Claude + Codex + LM Studio. Power-user mode, all three agents. |
 | **implement** | Fast pipeline: architect → develop → test. For clear, well-understood requirements. |
 | **finalize** | Post-plan pipeline: develop → test. Use when a plan already exists. |
 
@@ -56,12 +59,13 @@ git -C ~/.claude/plugins/marketplaces/craft-skills pull --ff-only && claude plug
 | Skill | Description |
 |---|---|
 | **architect** | Analyze requirements and create a detailed implementation plan. No code written. |
-| **develop** | Execute an approved plan using parallel frontend-developer agents with shared state coordination. |
+| **develop** | Execute an approved plan using parallel agents with shared state coordination. |
 | **browser-test** | Plan and run parallel browser-based UI tests using multiple agents. |
 | **debug** | Systematic root-cause investigation before attempting any fix. |
 | **simplify** | Review changed code for reuse opportunities, quality, and DDD compliance. |
-| **reflect** | Self-improvement: audit project configs, maintain skill health, sync upstream, auto-dream. |
-| **llm-review** | Run a local LLM review on files. Auto-loads/unloads model. Free second opinion with thinking mode. |
+| **reflect** | Self-improvement: audit project configs, maintain skill health, sync upstream. |
+| **llm-review** | Run a local LLM review on files. Auto-loads/unloads model. |
+| **graph-explore** | Explore codebase structure using the code-review-graph knowledge graph. |
 
 ### System Skills
 
@@ -73,7 +77,7 @@ git -C ~/.claude/plugins/marketplaces/craft-skills pull --ff-only && claude plug
 
 ### Automatic triggering
 
-The bootstrap skill loads at every session start and watches for trigger conditions. When you describe a task, the relevant skill is invoked automatically:
+The bootstrap skill loads at every session start and watches for trigger conditions:
 
 - "Add a reviews domain" → triggers **craft** or **implement**
 - "The toast doesn't show after saving" → triggers **debug**
@@ -81,10 +85,9 @@ The bootstrap skill loads at every session start and watches for trigger conditi
 
 ### Manual invocation
 
-Use slash commands directly:
-
 ```
 /craft Add a notification preferences page
+/craft-ace Build a reporting dashboard
 /implement 15
 /debug The form validation isn't working
 /reflect project
@@ -98,45 +101,86 @@ Pipeline skills accept three input formats:
 - **Direct text**: `/implement Add a logout button`
 - **Empty**: auto-detects recent plans or asks for input
 
+## How craft-ace Works
+
+`craft-ace` is the cost-optimized variant where a local LLM (Gemma 4 26B) handles implementation and reviews, while Claude Opus orchestrates.
+
+**Role split:**
+
+| Role | Model | Cost |
+|---|---|---|
+| Orchestrator, brainstorm, integration | Opus | Paid |
+| Spec & plan reviews (up to 4 rounds each) | Gemma | Free |
+| Data layer implementation (types, services, schemas, queries) | Gemma | Free |
+| UI component implementation | Gemma first, Sonnet fallback | Mostly free |
+| Post-develop review | Gemma | Free |
+
+**How Gemma implements code:**
+1. Orchestrator selects reference files from the codebase (via knowledge graph or glob)
+2. `llm-implement.sh` sends the task + reference files to Gemma
+3. Gemma writes files using a `write_file` tool (scope-restricted, atomic writes)
+4. Returns structured JSON status (DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED)
+5. If Gemma fails, Sonnet takes over with Gemma's attempt as additional context
+
 ## Architecture
 
 ```
 craft-skills/
 ├── .claude-plugin/
-│   ├── plugin.json          # Plugin manifest
-│   └── marketplace.json     # GitHub marketplace definition
+│   ├── plugin.json              # Plugin manifest
+│   └── marketplace.json         # GitHub marketplace definition
 ├── skills/
-│   ├── bootstrap/SKILL.md
-│   ├── craft/SKILL.md
-│   ├── craft-ace/SKILL.md         # Local LLM implementer variant
-│   ├── craft-duo/SKILL.md         # Codex co-executor variant
-│   ├── craft-local/SKILL.md       # Local LLM review variant
-│   ├── craft-squad/SKILL.md       # All three agents variant
-│   ├── _craft-core/               # Shared profile definitions
-│   │   └── profiles.md
+│   ├── _craft-core/             # Shared pipeline logic
+│   │   ├── core.md              # Pipeline phases
+│   │   ├── profiles.md          # Executor profile definitions
+│   │   ├── codex-executor.md    # Codex invocation guide
+│   │   └── llm-gating.md       # LLM step gating rules
+│   ├── craft/SKILL.md           # Base craft pipeline
+│   ├── craft-ace/SKILL.md       # Local LLM implementer variant
+│   ├── craft-duo/SKILL.md       # Codex co-executor variant
+│   ├── craft-local/SKILL.md     # Local LLM review variant
+│   ├── craft-squad/SKILL.md     # All three agents variant
 │   ├── implement/SKILL.md
 │   ├── finalize/SKILL.md
 │   ├── architect/
 │   │   ├── SKILL.md
-│   │   └── architect-prompt.md    # Implementation architect agent prompt
+│   │   └── architect-prompt.md
 │   ├── develop/
 │   │   ├── SKILL.md
-│   │   ├── implementer-prompt.md  # Frontend developer agent prompt
-│   │   └── codex-prompt.md        # Codex task prompt template
+│   │   ├── implementer-prompt.md
+│   │   └── codex-prompt.md
 │   ├── browser-test/
 │   │   ├── SKILL.md
-│   │   └── tester-prompt.md       # Browser tester agent prompt
-│   ├── reflect/SKILL.md
+│   │   └── tester-prompt.md
 │   ├── debug/SKILL.md
 │   ├── simplify/SKILL.md
-│   └── llm-review/SKILL.md
+│   ├── reflect/SKILL.md
+│   ├── llm-review/
+│   │   ├── SKILL.md
+│   │   └── dispatch-prompt.md
+│   ├── graph-explore/
+│   │   ├── SKILL.md
+│   │   └── dispatch-prompt.md
+│   └── bootstrap/SKILL.md
+├── scripts/
+│   ├── llm-config.sh            # Shared LLM defaults + llm_ensure_loaded()
+│   ├── llm-implement.sh         # LLM implementation agent (write_file + STATUS)
+│   ├── llm-agent.sh             # LLM exploration agent (read-only tools)
+│   ├── llm-review.sh            # Single file review with thinking mode
+│   ├── llm-analyze.sh           # Multi-file analysis
+│   ├── llm-check.sh             # Availability check + auto-load
+│   ├── llm-unload.sh            # Unload model from RAM
+│   ├── codex-dispatch.sh        # Codex task dispatcher
+│   ├── codex-status-schema.json # JSON schema for task status
+│   ├── sync-agents-md.sh        # Generate AGENTS.md from CLAUDE.md
+│   └── sync-check.sh            # Upstream sync verification
 ├── hooks/
-│   ├── hooks.json           # SessionStart hook config
-│   └── session-start        # Bootstrap injection script
+│   ├── hooks.json               # SessionStart hook config
+│   └── session-start            # Bootstrap injection script
 ├── references/
-│   └── superpowers-sync.md  # Upstream sync tracking
-├── migration-prompt.md      # Prompt for migrating existing projects
-├── new-project-prompt.md    # Prompt for initializing new projects
+│   └── superpowers-sync.md      # Upstream sync tracking
+├── migration-prompt.md          # Prompt for migrating existing projects
+├── new-project-prompt.md        # Prompt for initializing new projects
 └── package.json
 ```
 
@@ -171,39 +215,49 @@ Use the new project prompt:
 
 ## Optional Integrations
 
-craft-skills detects and uses these plugins when available. Nothing breaks without them — steps are skipped automatically.
+craft-skills detects and uses these when available. Nothing breaks without them — steps are skipped automatically.
 
 ### Local LLM (via LM Studio)
 
-Gemma 4 26B A4B (8-bit) running locally. Used for two purposes depending on which craft variant you choose:
-
-- **`craft-local`** — Reviews only (spec, plan, post-develop). Free second opinion from a different model architecture.
-- **`craft-ace`** — Reviews AND implementation. Gemma writes code with `write_file` tool, following project patterns from reference files. ~45-60% API cost reduction.
+Required by `craft-ace`, `craft-local`, and `craft-squad`. Optional for all other skills.
 
 **Setup:**
 
-1. Install [LM Studio](https://lmstudio.ai) and download `google/gemma-4-26b-a4b` (8-bit)
+1. Install [LM Studio](https://lmstudio.ai) and download `google/gemma-4-26b-a4b` (8-bit quantization)
 2. Start the local server in LM Studio (Local Server → Start)
 
-**Scripts included:**
+Scripts auto-detect LM Studio, load the model, and unload when done. All scripts source `llm-config.sh` for defaults. Override with env vars:
+
+```bash
+LLM_MODEL="your/model-id" LLM_URL="http://localhost:1234" /craft-ace
+```
 
 | Script | Purpose |
 |---|---|
-| `llm-config.sh` | Shared defaults (model, URL, context length) + `llm_ensure_loaded()` function |
-| `llm-implement.sh` | **Implementation agent** — writes files via `write_file` tool, returns structured JSON status. Used by `craft-ace`. |
-| `llm-agent.sh` | Autonomous exploration agent with file access tools |
-| `llm-review.sh` | Reviews a single file with thinking mode |
-| `llm-analyze.sh` | Analyzes multiple files together |
-| `llm-check.sh` | Checks availability, auto-loads model |
-| `llm-unload.sh` | Unloads model from RAM |
+| `llm-config.sh` | Shared defaults (model, URL, context length) + `llm_ensure_loaded()` |
+| `llm-implement.sh` | Implementation agent with `write_file` tool. Returns structured JSON status. |
+| `llm-agent.sh` | Exploration agent with read-only file tools |
+| `llm-review.sh` | Single file review with thinking mode |
+| `llm-analyze.sh` | Multi-file analysis with thinking mode |
+| `llm-check.sh` | Availability check + model auto-load |
+| `llm-unload.sh` | Unload all models from RAM |
 
-All scripts source `llm-config.sh` for model defaults. Override with env vars: `LLM_MODEL`, `LLM_URL`, `LLM_CONTEXT_LENGTH`.
+### Codex CLI (via OpenAI)
 
-**Used in:** `craft-ace` (implementation + reviews), `craft-local` (reviews only), `craft-squad` (reviews only), `develop` (post-develop review), `debug` (data flow tracing). Can also be invoked directly: `/llm-review path/to/file.ts "focus area"`
+Required by `craft-duo` and `craft-squad`. Not used by other variants.
+
+**Setup:**
+
+```bash
+npm i -g @openai/codex
+codex login
+```
+
+Codex handles data-layer implementation tasks (types, services, queries, schemas) while Claude handles UI and integration. `AGENTS.md` is auto-generated from your `CLAUDE.md` so Codex inherits project conventions.
 
 ### Code review graph (via code-review-graph plugin)
 
-Builds a structural map of your codebase with Tree-sitter, tracks changes incrementally, and provides blast-radius analysis so Claude reads only the files that matter. Up to 8x token reduction on reviews.
+Builds a structural knowledge graph of your codebase with Tree-sitter. Provides blast-radius analysis, semantic search, and import/export relationship queries.
 
 **Setup:**
 
@@ -213,7 +267,10 @@ code-review-graph install
 code-review-graph build
 ```
 
-**Used in:** `develop` (post-develop review — identifies high-risk files for targeted review)
+**Used in:**
+- `craft` / `craft-ace` — codebase exploration during brainstorming
+- `craft-ace` — reference file selection for Gemma (graph finds the best pattern-match files)
+- `develop` — post-develop review (identifies high-risk changed files)
 
 ### UI/UX review (via ui-ux-pro-max skill)
 
@@ -223,7 +280,7 @@ Reviews spec UI sections — component layouts, interaction patterns, form desig
 
 ## Methodology
 
-craft-skills absorbs proven workflows from [superpowers](https://github.com/obra/superpowers) (v5.0.6) and adds DDD-specific layers:
+craft-skills absorbs proven workflows from [superpowers](https://github.com/obra/superpowers) and adds DDD-specific layers:
 
 | From superpowers | Absorbed into | What was kept |
 |---|---|---|
