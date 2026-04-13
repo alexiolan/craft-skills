@@ -43,7 +43,11 @@ git -C ~/.claude/plugins/marketplaces/craft-skills pull --ff-only && claude plug
 
 | Skill | Description |
 |---|---|
-| **craft** | Full pipeline: brainstorm → plan → develop → test. For complex features or unclear requirements. |
+| **craft** | Full pipeline: brainstorm → plan → develop → test. Claude only, no external deps. |
+| **craft-ace** | Craft with local Gemma as implementer + reviewer. Opus orchestrates, Sonnet fallback. ~45-60% cost savings. Requires LM Studio. |
+| **craft-duo** | Craft with Codex as co-executor for data-layer tasks. Requires Codex CLI. |
+| **craft-local** | Craft with LM Studio LLM reviews. Deeper review, no implementation delegation. Requires LM Studio. |
+| **craft-squad** | Craft with Claude + Codex + LM Studio. Power-user mode, all three agents. |
 | **implement** | Fast pipeline: architect → develop → test. For clear, well-understood requirements. |
 | **finalize** | Post-plan pipeline: develop → test. Use when a plan already exists. |
 
@@ -104,6 +108,12 @@ craft-skills/
 ├── skills/
 │   ├── bootstrap/SKILL.md
 │   ├── craft/SKILL.md
+│   ├── craft-ace/SKILL.md         # Local LLM implementer variant
+│   ├── craft-duo/SKILL.md         # Codex co-executor variant
+│   ├── craft-local/SKILL.md       # Local LLM review variant
+│   ├── craft-squad/SKILL.md       # All three agents variant
+│   ├── _craft-core/               # Shared profile definitions
+│   │   └── profiles.md
 │   ├── implement/SKILL.md
 │   ├── finalize/SKILL.md
 │   ├── architect/
@@ -111,7 +121,8 @@ craft-skills/
 │   │   └── architect-prompt.md    # Implementation architect agent prompt
 │   ├── develop/
 │   │   ├── SKILL.md
-│   │   └── implementer-prompt.md  # Frontend developer agent prompt
+│   │   ├── implementer-prompt.md  # Frontend developer agent prompt
+│   │   └── codex-prompt.md        # Codex task prompt template
 │   ├── browser-test/
 │   │   ├── SKILL.md
 │   │   └── tester-prompt.md       # Browser tester agent prompt
@@ -162,26 +173,33 @@ Use the new project prompt:
 
 craft-skills detects and uses these plugins when available. Nothing breaks without them — steps are skipped automatically.
 
-### Local LLM review (via LM Studio)
+### Local LLM (via LM Studio)
 
-Free second opinion from a different model architecture (Qwen3.5-35B-A3B with thinking mode). Catches issues Claude might miss — not a token saver, but a quality booster. The `llm-review` skill auto-loads the model, runs the review, and unloads when done.
+Gemma 4 26B A4B (8-bit) running locally. Used for two purposes depending on which craft variant you choose:
+
+- **`craft-local`** — Reviews only (spec, plan, post-develop). Free second opinion from a different model architecture.
+- **`craft-ace`** — Reviews AND implementation. Gemma writes code with `write_file` tool, following project patterns from reference files. ~45-60% API cost reduction.
 
 **Setup:**
 
-1. Install [LM Studio](https://lmstudio.ai) and download `qwen3.5-35b-a3b` (~22GB)
+1. Install [LM Studio](https://lmstudio.ai) and download `google/gemma-4-26b-a4b` (8-bit)
 2. Start the local server in LM Studio (Local Server → Start)
 
 **Scripts included:**
 
 | Script | Purpose |
 |---|---|
-| `llm-agent.sh` | Autonomous agent with file access tools — Claude saves the most tokens |
-| `llm-review.sh` | Reviews a single file (content passed to LLM) |
+| `llm-config.sh` | Shared defaults (model, URL, context length) + `llm_ensure_loaded()` function |
+| `llm-implement.sh` | **Implementation agent** — writes files via `write_file` tool, returns structured JSON status. Used by `craft-ace`. |
+| `llm-agent.sh` | Autonomous exploration agent with file access tools |
+| `llm-review.sh` | Reviews a single file with thinking mode |
 | `llm-analyze.sh` | Analyzes multiple files together |
 | `llm-check.sh` | Checks availability, auto-loads model |
 | `llm-unload.sh` | Unloads model from RAM |
 
-**Used in:** `craft` (exploration, spec review, plan review), `develop` (post-develop review), `debug` (data flow tracing). Can also be invoked directly: `/llm-review path/to/file.ts "focus area"`
+All scripts source `llm-config.sh` for model defaults. Override with env vars: `LLM_MODEL`, `LLM_URL`, `LLM_CONTEXT_LENGTH`.
+
+**Used in:** `craft-ace` (implementation + reviews), `craft-local` (reviews only), `craft-squad` (reviews only), `develop` (post-develop review), `debug` (data flow tracing). Can also be invoked directly: `/llm-review path/to/file.ts "focus area"`
 
 ### Code review graph (via code-review-graph plugin)
 
