@@ -344,27 +344,62 @@ Real-world benchmark: implementing a complete domain (types, service, query hook
 | **Codex tasks** | — | — | 3/3 clean | 3/3 clean |
 | **Gemma tasks** | — | 2/4 clean | — | review only |
 
+### Delegation Ratio
+
+The benchmark feature produces 170 lines of code across 10 files. Here's how the work is distributed across executors:
+
+| Task | LOC | craft | craft-ace | craft-duo | craft-squad |
+|---|---|---|---|---|---|
+| Models (types) | 28 | Claude | Gemma | Codex | Codex |
+| Service (API layer) | 28 | Claude | Gemma | Codex | Codex |
+| Queries (data hooks) | 36 | Claude | Gemma | Codex | Codex |
+| Barrel exports | 4 | Claude | Claude | Claude | Claude |
+| UI component | 74 | Claude | Gemma | Claude | Claude |
+| **Claude LOC** | | **170 (100%)** | **4 (2%)** | **78 (46%)** | **78 (46%)** |
+| **Delegated LOC** | | **0** | **166 (98%)** | **92 (54%)** | **92 (54%)** |
+
+**Claude API tokens (orchestrator):**
+
+| | craft | craft-ace | craft-duo | craft-squad |
+|---|---|---|---|---|
+| **Tokens** | 24,606 | 38,572 | 61,779 | 45,137 |
+| **Of which: implementation** | ~24K | ~4K | ~30K | ~25K |
+| **Of which: orchestration overhead** | ~1K | ~35K | ~32K | ~20K |
+
+> Orchestration overhead includes: reading reference files, writing dispatch prompts, parsing JSON output, running verification. This overhead is the "cost" of delegation — ace/duo/squad spend Claude tokens coordinating external executors instead of writing code directly.
+
+**Net Claude token economy vs baseline:**
+
+| Variant | Claude implementation tokens | Savings vs craft | Quality |
+|---|---|---|---|
+| **craft** | ~24K (baseline) | — | 1 fix iteration |
+| **craft-ace** | ~4K | **~83% fewer** | 2 fix iterations (minor) |
+| **craft-duo** | ~30K | **~0% fewer*** | 0 fix iterations |
+| **craft-squad** | ~25K | **~0% fewer*** | 0 fix iterations + review |
+
+*\* craft-duo and craft-squad use MORE total Claude tokens than baseline due to orchestration overhead (Codex prompt generation, AGENTS.md sync, JSON parsing). The savings come from Codex/OpenAI tokens being cheaper than Claude tokens, and from parallelization potential on larger features.*
+
 ### Observations
 
-**craft (baseline):** Fastest overall. Claude Sonnet handled all tasks with only one import-order lint fix. Best choice when you want speed and simplicity with no external dependencies.
+**craft (baseline):** Fastest and most token-efficient. Claude generates everything in one pass. Best for speed and simplicity.
 
-**craft-ace:** Gemma successfully implemented 2/4 tasks with zero errors (models + service). The other 2 needed minor fixes — a hallucinated type name in queries and an import ordering issue in UI. Wall time is longer due to LM Studio model loading (~2 min cold start) and sequential local inference. API cost savings: ~50% (4 of 6 tasks ran locally for free).
+**craft-ace:** Biggest Claude API savings — Gemma handles 98% of code generation locally for free. Claude only writes trivial barrel exports and orchestrates. Trade-off: 6x slower wall time (local inference) and 2 minor fixes needed. Best for cost-conscious development.
 
-**craft-duo:** All 3 Codex dispatches succeeded (GPT-5 default model). Codex correctly read project conventions from AGENTS.md and produced clean code matching reference patterns. Zero fix iterations. Data layer ran on Codex while Claude handled UI — ~30% of implementation offloaded.
+**craft-duo:** Codex (GPT-5) handled data layer perfectly — 3/3 dispatches clean with zero fixes. But orchestration overhead means total Claude tokens are comparable to baseline. The real benefit is on larger features where Codex tasks run in parallel with Claude UI tasks, reducing wall time.
 
-**craft-squad:** Same Codex success as duo, plus Gemma post-develop review. Gemma found 2 items, both false positives (a valid invalidation pattern and a style preference not used in the codebase). Adds review depth at the cost of ~2 min extra wall time.
+**craft-squad:** Combines Codex implementation + Gemma review. Gemma's review found only false positives on this feature. Most valuable on complex features where an independent review catches real issues.
 
 ### When to use what
 
 | Situation | Recommended variant |
 |---|---|
 | Speed matters most | `craft` |
-| Want to reduce API costs | `craft-ace` |
-| Want to offload data layer | `craft-duo` |
+| Minimize Claude API costs | `craft-ace` |
+| Parallel execution on large features | `craft-duo` |
 | Maximum review coverage | `craft-squad` or `craft-local` |
 | No external dependencies | `craft` |
 
-> **Note:** Benchmarks represent a single run on one feature type (10-file domain). Results vary by feature complexity, model availability, and hardware. All variants include graceful fallback — if an external service is unavailable, tasks automatically fall back to Claude.
+> **Note:** Benchmarks represent a single run on one feature type (10-file domain with 170 LOC). Results vary by feature complexity — larger features with more data-layer tasks show greater delegation benefits. All variants include graceful fallback — if an external service is unavailable, tasks automatically fall back to Claude.
 
 ## License
 
