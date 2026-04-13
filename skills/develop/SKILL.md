@@ -111,15 +111,11 @@ Dispatch tasks to **developer** agents. Read the agent prompt template from the 
 | Data layer (types, services, queries, schemas) | Claude **sonnet** | **Codex** (two-tier, see below) |
 | UI components (feature/page components, reusable UI) | Claude **sonnet** | Claude **sonnet** |
 | Integration (wiring, routing, cross-component state) | Claude **opus** | Claude **opus** |
-| Bulk mechanical fixes (lint/tsc repair sweeps) | Claude **sonnet** | **Codex** (`codex-mini`) |
+| Bulk mechanical fixes (lint/tsc repair sweeps) | Claude **sonnet** | **Codex** (`default`) |
 
-**Within-Codex two-tier routing** (only when a task is routed to Codex):
+**Codex model selection** (only when a task is routed to Codex):
 
-| Target file glob | Codex model |
-|---|---|
-| `*/data/models/*.ts`, `*/data/enums/*.ts`, `*/data/schemas/*Schemas.ts`, `*/data/mappers/*.ts` | `codex-mini` |
-| `*/data/infrastructure/*Service.ts`, `*/data/queries/*Queries.ts` | `gpt-5-codex` |
-| Bulk lint/tsc fixes | `codex-mini` |
+Use `default` for all tasks when authenticated via `codex login` (ChatGPT auth). Specific models (`codex-mini`, `gpt-5-codex`) require an OpenAI API key. See `_craft-core/codex-executor.md` for details.
 
 **Executor selection for `claude+ace` profile:**
 

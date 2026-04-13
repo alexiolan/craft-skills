@@ -61,15 +61,27 @@ OUTPUT_FILE="$PROJECT_ROOT/.codex-output-$TASK_ID.json"
 # Run Codex. Pipe prompt via stdin.
 # Use set +e around codex so we can capture exit code without triggering errexit.
 set +e
-codex exec \
-  --full-auto \
-  --sandbox workspace-write \
-  -C "$PROJECT_ROOT" \
-  --ephemeral \
-  --output-schema "$SCHEMA_FILE" \
-  --output-last-message "$OUTPUT_FILE" \
-  -m "$CODEX_MODEL" \
-  - < "$PROMPT_FILE"
+# Model selection: use explicit model if provided and non-empty, otherwise Codex default
+if [[ -n "$CODEX_MODEL" && "$CODEX_MODEL" != "default" ]]; then
+  codex exec \
+    --full-auto \
+    --sandbox workspace-write \
+    -C "$PROJECT_ROOT" \
+    --ephemeral \
+    --output-schema "$SCHEMA_FILE" \
+    --output-last-message "$OUTPUT_FILE" \
+    -m "$CODEX_MODEL" \
+    - < "$PROMPT_FILE"
+else
+  codex exec \
+    --full-auto \
+    --sandbox workspace-write \
+    -C "$PROJECT_ROOT" \
+    --ephemeral \
+    --output-schema "$SCHEMA_FILE" \
+    --output-last-message "$OUTPUT_FILE" \
+    - < "$PROMPT_FILE"
+fi
 CODEX_EXIT=$?
 set -e
 

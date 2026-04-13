@@ -33,17 +33,19 @@ codex --version >/dev/null 2>&1 || {
 
 No silent fallback to Claude. User explicitly chose a codex profile.
 
-## Two-tier model routing
+## Model selection
 
-When Codex is routed a task, pick the model based on the target filename pattern:
+By default, Codex uses its default model (currently GPT-5). Pass `"default"` as the model parameter to use this.
 
-| Target path glob | Model |
-|---|---|
-| Types, enums, schemas, mappers (simple data definitions) | `codex-mini` |
-| Services, query hooks (API integration logic) | `gpt-5-codex` |
-| Bulk lint/type-check fix sweeps | `codex-mini` |
+If you have an OpenAI API key (not ChatGPT auth), you can specify models explicitly:
 
-Map these categories to your project's file structure. Example: `*/models/*.ts` -> types, `*/services/*Service.ts` -> services.
+| Task complexity | Model | Auth required |
+|---|---|---|
+| Simple data definitions (types, enums, schemas) | `codex-mini` | API key |
+| API integration (services, queries) | `gpt-5-codex` | API key |
+| Any task | `default` (GPT-5) | ChatGPT or API key |
+
+> **Note:** `codex-mini` and `gpt-5-codex` are NOT available with ChatGPT authentication. Use `default` if you authenticated via `codex login`.
 
 ## Invocation shape
 
@@ -57,7 +59,7 @@ codex exec \
   --ephemeral \
   --output-schema "$CRAFT_SCRIPTS/codex-status-schema.json" \
   --output-last-message "$PROJECT_ROOT/.codex-output-$TASK_ID.json" \
-  -m "$CODEX_MODEL" \
+  -m "$CODEX_MODEL" \   # omitted when model is "default"
   - < "$PROJECT_ROOT/.codex-prompt-$TASK_ID.txt"
 ```
 

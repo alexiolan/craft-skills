@@ -326,6 +326,46 @@ Create a `.claude/CLAUDE.md` that describes your project's:
 
 craft-skills reads your CLAUDE.md and adapts its workflows accordingly. No special configuration needed — just invoke `/craft`, `/implement`, or `/debug` as usual.
 
+## Benchmarks
+
+Real-world benchmark: implementing a complete domain (types, service, query hooks, UI component — 10 files) on a mid-size DDD project. Same feature, same plan, each variant in an isolated git worktree.
+
+### Results
+
+| Metric | craft | craft-ace | craft-duo | craft-squad |
+|---|---|---|---|---|
+| **Wall time** | 2m 36s | 16m 11s | 5m 42s | 7m 40s |
+| **Files created** | 10 | 10 | 10 | 10 |
+| **Fix iterations** | 1 | 2 | 0 | 0 |
+| **Build pass** | Yes | Yes | Yes | Yes |
+| **Data layer executor** | Claude Sonnet | Gemma (local) | Codex (GPT-5) | Codex (GPT-5) |
+| **UI executor** | Claude Sonnet | Gemma + Sonnet fallback | Claude Sonnet | Claude Sonnet |
+| **Review executor** | — | Gemma (local) | — | Gemma (local) |
+| **Codex tasks** | — | — | 3/3 clean | 3/3 clean |
+| **Gemma tasks** | — | 2/4 clean | — | review only |
+
+### Observations
+
+**craft (baseline):** Fastest overall. Claude Sonnet handled all tasks with only one import-order lint fix. Best choice when you want speed and simplicity with no external dependencies.
+
+**craft-ace:** Gemma successfully implemented 2/4 tasks with zero errors (models + service). The other 2 needed minor fixes — a hallucinated type name in queries and an import ordering issue in UI. Wall time is longer due to LM Studio model loading (~2 min cold start) and sequential local inference. API cost savings: ~50% (4 of 6 tasks ran locally for free).
+
+**craft-duo:** All 3 Codex dispatches succeeded (GPT-5 default model). Codex correctly read project conventions from AGENTS.md and produced clean code matching reference patterns. Zero fix iterations. Data layer ran on Codex while Claude handled UI — ~30% of implementation offloaded.
+
+**craft-squad:** Same Codex success as duo, plus Gemma post-develop review. Gemma found 2 items, both false positives (a valid invalidation pattern and a style preference not used in the codebase). Adds review depth at the cost of ~2 min extra wall time.
+
+### When to use what
+
+| Situation | Recommended variant |
+|---|---|
+| Speed matters most | `craft` |
+| Want to reduce API costs | `craft-ace` |
+| Want to offload data layer | `craft-duo` |
+| Maximum review coverage | `craft-squad` or `craft-local` |
+| No external dependencies | `craft` |
+
+> **Note:** Benchmarks represent a single run on one feature type (10-file domain). Results vary by feature complexity, model availability, and hardware. All variants include graceful fallback — if an external service is unavailable, tasks automatically fall back to Claude.
+
 ## License
 
 MIT
