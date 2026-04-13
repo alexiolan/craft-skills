@@ -28,19 +28,15 @@ Replaces generic AI workflows with battle-tested, structured processes: collabor
 
 All craft variants share the same pipeline: **Brainstorm → Plan → Develop → Test → Report**. They differ in which models handle each phase:
 
-| Skill | Who implements | Who reviews | Requirements | Cost savings |
-|---|---|---|---|---|
-| **craft** | Claude (Sonnet) | Claude (Opus/Sonnet) | None | Baseline |
-| **craft-ace** | Gemma (local LLM) | Gemma (review loops) | LM Studio | ~45-60% |
-| **craft-duo** | Claude + Codex | Claude (Opus/Sonnet) | Codex CLI | ~15-20% |
-| **craft-local** | Claude (Sonnet) | Claude + Gemma | LM Studio | ~0% (quality boost) |
-| **craft-squad** | Claude + Codex | Claude + Gemma | Codex CLI + LM Studio | ~15-20% |
+| Skill | Who implements | Who reviews | Requirements |
+|---|---|---|---|
+| **craft** | Claude (Sonnet) | Claude (Opus/Sonnet) | None |
+| **craft-ace** | Gemma (local LLM) | Gemma (review loops) | LM Studio |
+| **craft-duo** | Claude + Codex (GPT-5) | Claude (Opus/Sonnet) | Codex CLI |
+| **craft-local** | Claude (Sonnet) | Claude + Gemma | LM Studio |
+| **craft-squad** | Claude + Codex (GPT-5) | Claude + Gemma | Codex CLI + LM Studio |
 
-**Choosing a variant:**
-- **No external deps?** Use `craft`
-- **Want cost savings?** Use `craft-ace` (requires LM Studio with Gemma)
-- **Want deeper review?** Use `craft-local` (requires LM Studio)
-- **Have Codex CLI?** Use `craft-duo` or `craft-squad`
+See [Choosing a Variant](#choosing-a-variant) in the Benchmarks section for detailed comparison with real performance data.
 
 ### Shortcut Pipeline Skills
 
@@ -74,7 +70,7 @@ All craft variants share the same pipeline: **Brainstorm → Plan → Develop �
 
 The bootstrap skill loads at every session start and watches for trigger conditions:
 
-- "Add a reviews domain" → triggers **craft** or **implement**
+- "Add a reviews module" → triggers **craft** or **implement**
 - "The API returns 500 after saving" → triggers **debug**
 - "Audit the Claude configs" → triggers **reflect**
 
@@ -84,7 +80,7 @@ The bootstrap skill loads at every session start and watches for trigger conditi
 /craft Add a notification preferences page
 /craft-ace Build a reporting dashboard
 /implement 15
-/debug The form validation isn't working
+/debug The API returns 500 on save
 /reflect project
 ```
 
@@ -173,7 +169,10 @@ craft-skills/
 │   ├── hooks.json               # SessionStart hook config
 │   └── session-start            # Bootstrap injection script
 ├── references/
-│   └── superpowers-sync.md      # Upstream sync tracking
+│   ├── superpowers-sync.md      # Upstream sync tracking
+│   ├── form-field-patterns.md   # TanStack Form + Zod reference
+│   ├── daisyui-portal-patterns.md # Portal/overflow solutions
+│   └── vitest-setup.md          # Test setup reference
 ├── prompts/
 │   ├── frontend/
 │   │   ├── migration-prompt.md  # Migrate frontend projects
@@ -257,7 +256,7 @@ npm i -g @openai/codex
 codex login
 ```
 
-Codex handles data-layer implementation tasks (types, services, queries, schemas) while Claude handles UI and integration. `AGENTS.md` is auto-generated from your `CLAUDE.md` so Codex inherits project conventions.
+Codex handles data-layer implementation tasks (types, services, queries, schemas) while Claude handles UI and integration. Uses your account's default model (GPT-5 with ChatGPT auth, or specify `codex-mini`/`gpt-5-codex` with API key auth). `AGENTS.md` is auto-generated from your `CLAUDE.md` so Codex inherits project conventions.
 
 ### Code review graph (via code-review-graph plugin)
 
