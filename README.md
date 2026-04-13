@@ -325,4 +325,4 @@ The `reflect evolve` mode checks the superpowers repo for useful upstream change
 
 ## License
 
-MIT
+[GPL-3.0](LICENSE)
