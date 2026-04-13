@@ -389,15 +389,31 @@ The benchmark feature produces 170 lines of code across 10 files. Here's how the
 
 **craft-squad:** Combines Codex implementation + Gemma review. Gemma's review found only false positives on this feature. Most valuable on complex features where an independent review catches real issues.
 
-### When to use what
+### Choosing a Variant
 
-| Situation | Recommended variant |
-|---|---|
-| Speed matters most | `craft` |
-| Minimize Claude API costs | `craft-ace` |
-| Parallel execution on large features | `craft-duo` |
-| Maximum review coverage | `craft-squad` or `craft-local` |
-| No external dependencies | `craft` |
+| Variant | Best for | Trade-offs | Requirements |
+|---|---|---|---|
+| **craft** | Day-to-day development. Fast iteration, quick features, bug fixes. You want the simplest and most reliable path. | Fastest (2-3 min). All tokens go to Claude — no delegation overhead, no external dependencies to break. Slight quality variance (1 fix iteration typical). | None |
+| **craft-ace** | Cost-conscious development. You're building multiple features and want to minimize Claude API spend. Good for data-heavy domains with lots of types/services. | Biggest savings (~83% fewer Claude implementation tokens). Gemma handles 98% of code generation locally for free. Trade-off: 6x slower wall time due to local inference, and occasional minor fixes needed (hallucinated names, import ordering). | LM Studio + Gemma model |
+| **craft-duo** | Large features where parallelism matters. Codex runs data-layer tasks while Claude handles UI simultaneously. Best when you have 10+ tasks and want wall-time reduction. | Codex produces clean code (0 fix iterations), but orchestration overhead means no Claude token savings on small features. Real benefit appears at scale. | Codex CLI |
+| **craft-local** | Deeper review without changing who implements. Same as craft, but with Gemma reviewing specs, plans, and post-develop code. Good when stakes are high. | Adds ~30% wall time for review passes. No cost savings — quality investment. | LM Studio + Gemma model |
+| **craft-squad** | Maximum coverage on critical features. All three AIs contribute: Codex implements data layer, Claude handles UI, Gemma reviews everything. | Most thorough but slowest (7-8 min). Gemma review may produce false positives on simple features — more valuable on complex ones. | Codex CLI + LM Studio |
+
+**Decision flowchart:**
+
+```
+Need to build something?
+  → Is it a quick fix or small feature?     → craft
+  → Is it a large feature?
+      → Do you have LM Studio?
+          → Want to save money?              → craft-ace
+          → Want deeper review?              → craft-local
+      → Do you have Codex CLI?
+          → Want parallel execution?         → craft-duo
+      → Have both?
+          → High stakes, want everything?    → craft-squad
+  → Not sure?                                → craft (always works)
+```
 
 > **Note:** Benchmarks represent a single run on one feature type (10-file domain with 170 LOC). Results vary by feature complexity — larger features with more data-layer tasks show greater delegation benefits. All variants include graceful fallback — if an external service is unavailable, tasks automatically fall back to Claude.
 
