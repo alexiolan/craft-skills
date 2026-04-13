@@ -153,9 +153,11 @@ Save the validated design to `.claude/plans/specs/YYYY-MM-DD-{feature}-design.md
 
 ### 1.8 UI/UX Review (conditional)
 
-**Skip this step if the project does not have the `ui-ux-pro-max` skill available.**
+**Skip this step unless BOTH conditions are met:**
+1. The `ui-ux-pro-max` skill is available (check via Skill tool)
+2. The project has UI components — CLAUDE.md references a UI framework (React, Vue, Svelte, Angular) OR the codebase contains `.tsx`, `.vue`, or `.svelte` files
 
-If available, invoke the `ui-ux-pro-max` skill to review the spec's UI-related sections: component layouts, interaction patterns, step flows, form design, table design, error states, loading states, and accessibility.
+If both conditions are met, invoke the `ui-ux-pro-max` skill to review the spec's UI-related sections: component layouts, interaction patterns, step flows, form design, table design, error states, loading states, and accessibility.
 
 Provide the skill with:
 - The spec's component architecture and step-by-step UX flow

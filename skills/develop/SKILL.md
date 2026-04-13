@@ -329,8 +329,14 @@ If the check returned `ADVERSARIAL_REVIEW_AVAILABLE`, invoke the `codex-plugin-c
 
 If the plugin is not installed or the profile excludes codex, skip this step silently. This is a bonus, not a dependency — no error, no warning, no prompt to the user.
 
+**Step C.6 — UI/UX review (conditional):**
+
+If the `ui-ux-pro-max` skill is available AND `.shared-state.md` lists created/modified UI files (`.tsx`, `.vue`, `.svelte` extensions under `feature/`, `ui/`, `pages/`, `components/`, or similar), invoke it to review the implemented UI components for: layout quality, interaction patterns, loading/error states, accessibility, and design system consistency.
+
+Pass the list of UI files from shared state. Skip silently if the skill is not installed or no UI files were created.
+
 **Step C — Act on findings:**
-If any review (graph, LLM, or adversarial) surfaces issues, dispatch targeted **sonnet** fix agents before proceeding to verification.
+If any review (graph, LLM, adversarial, or UI/UX) surfaces issues, dispatch targeted **sonnet** fix agents before proceeding to verification.
 
 ## Step 4: Verification
 

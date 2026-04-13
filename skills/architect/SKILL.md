@@ -124,6 +124,8 @@ Review the implementation plan and verify:
 - Optimal approach with best practices
 - Existing components and utilities are reused where possible
 
+**UI/UX plan review (conditional):** If the `ui-ux-pro-max` skill is available AND the plan includes UI components (pages, forms, modals, tables), invoke it to review the plan's UI architecture: component hierarchy, interaction flows, loading/error states, and accessibility. Incorporate actionable suggestions into the plan. Skip if the project has no UI layer or the skill is not installed.
+
 Ask the user for approval:
 - If approved → save plan and report its path
 - If changes requested → send back to architect for revision

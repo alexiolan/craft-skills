@@ -75,6 +75,8 @@ Based on LLM findings, check for:
 - **Excessive error handling internally**: Trust internal code, don't over-validate
 - **Consistent naming**: Do new names follow existing codebase conventions?
 
+**UI/UX quality check (conditional):** If the `ui-ux-pro-max` skill is available AND changed files include UI components (`.tsx`, `.vue`, `.svelte`), invoke it to check for UI anti-patterns: inconsistent loading/error states, missing accessibility attributes, layout issues, and design system violations. Skip silently if not applicable.
+
 ## Step 6: Verification
 
 **Iron Law: Evidence before assertions.**

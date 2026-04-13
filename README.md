@@ -174,7 +174,13 @@ code-review-graph build
 
 ### UI/UX review (via ui-ux-pro-max skill)
 
-Reviews spec UI sections — layouts, interactions, form design, error states, accessibility — before implementation begins. Used in `craft` (spec review phase).
+Reviews UI components for layout quality, interaction patterns, loading/error states, accessibility, and design system consistency. Activates conditionally — only when the project has UI components (`.tsx`, `.vue`, `.svelte` files or a UI framework in CLAUDE.md).
+
+**Used in:**
+- `craft` — spec UI review (step 1.8)
+- `architect` — plan UI architecture review (step 2)
+- `develop` — post-develop UI component review (step 3.5)
+- `simplify` — UI anti-pattern detection in changed files
 
 ## Benchmarks
 
