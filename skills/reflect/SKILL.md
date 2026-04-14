@@ -1,11 +1,11 @@
 ---
 name: reflect
-description: "Use when auditing, improving, or maintaining Claude configuration, skills, and project health. Supports modes: full sweep, project health, skill health, evolution (upstream sync + auto-dream), and cleanup. Invoke periodically or when the user asks to audit or improve configs."
+description: "Use when auditing, improving, or maintaining project health — CLAUDE.md accuracy, memory hygiene, settings, plans, and pattern discovery. Invoke periodically or when the user asks to audit or improve their project configuration."
 ---
 
 # Reflect
 
-Comprehensive self-improvement: audit project configs, maintain skill health, sync upstream, generate enhancements, clean up.
+Project self-improvement: audit configs against reality, discover patterns worth documenting, clean up stale artifacts.
 
 ## Input
 
@@ -13,11 +13,10 @@ The user input is: `$ARGUMENTS`
 
 ### Mode Detection
 
-- **Empty or `full`**: Run all phases (full sweep)
-- **`project`**: Phase 1 only (project health audit)
-- **`skills`**: Phase 2 only (craft-skills package health)
-- **`evolve`**: Phase 3 only (upstream sync + auto-dream)
-- **`cleanup`**: Phase 4 only (housekeeping)
+- **Empty or `full`**: Run all phases
+- **`health`**: Phase 1 only (project health audit)
+- **`evolve`**: Phase 2 only (pattern discovery + CLAUDE.md evolution)
+- **`cleanup`**: Phase 3 only (housekeeping)
 
 ## Phase 1: Project Health
 
@@ -31,6 +30,7 @@ Read the project's CLAUDE.md and verify against the actual codebase:
 - **File paths**: Do referenced paths (shared components, config files) actually exist?
 - **Patterns**: Do described patterns (query factories, service layer, form fields) match current implementations?
 - **Shared components/hooks**: Are listed components and hooks still accurate?
+- **Outdated rules**: Are there rules referencing libraries, tools, or conventions no longer in use?
 
 ### 1.2 Parent vs Project CLAUDE.md
 
@@ -52,7 +52,7 @@ Read `settings.json` and `settings.local.json`:
 - Are all referenced plugins still installed and relevant?
 - Are there permissions for tools/commands no longer used?
 
-### 1.5 Plans & Prompts Cleanup
+### 1.5 Plans & Prompts
 
 For each plan in `.claude/plans/`:
 1. Check if the feature has been implemented (search codebase)
@@ -63,79 +63,60 @@ For each prompt in `.claude/prompts/`:
 1. Check if the feature has been implemented
 2. If implemented, propose archiving
 
-## Phase 2: Skill Health
+## Phase 2: Evolve
 
-Audit the craft-skills package itself.
+Discover patterns in how you work and propose improvements to project configuration.
 
-### 2.1 Internal Consistency
+### 2.1 Pattern Discovery
 
-Read all SKILL.md files and check:
-- All follow the same frontmatter format (name, description)
-- Description starts with "Use when..." (per agentskills.io spec)
-- No broken cross-skill references (if craft says "invoke develop", does develop exist?)
+Dispatch an agent to perform analysis of the current project:
 
-### 2.2 Prompt Freshness
-
-Read all agent prompt files (*-prompt.md):
-- Do they reference patterns that still exist in the parent CLAUDE.md?
-- Are they consistent with each other?
-
-### 2.3 Gap Analysis
-
-Read memory files across all projects under the parent workspace directory:
-- Are there feedback memories that repeat across projects? → Should be a skill rule
-- Are there recurring manual workflows? → Candidate for a new skill
-- Are there skills that get skipped often? → May need trigger condition tuning
-
-## Phase 3: Evolution
-
-### 3a: Superpowers Upstream Sync
-
-1. Fetch `https://raw.githubusercontent.com/obra/superpowers/main/CHANGELOG.md`
-2. Read `references/superpowers-sync.md` for last checked version
-3. If new version detected:
-   - Fetch changed SKILL.md files from the repository
-   - For each change: evaluate if it improves our workflow
-   - Draft adaptations (translate to our project context, don't copy-paste)
-   - Present proposals to user for approval
-4. Update `references/superpowers-sync.md` with new version and decisions
-
-### 3b: Claude Code Awareness
-
-Check if there are new Claude Code tools, capabilities, or patterns:
-- New tool types available?
-- New agent capabilities?
-- Suggest skill adaptations if relevant
-
-### 3c: Auto-Dream
-
-Dispatch an agent to perform deep analysis:
-1. Read all project memory files across projects in the workspace
-2. Analyze recent git history across projects (last 2 weeks)
+1. Read all memory files in the project's memory directory
+2. Analyze recent git history (last 2 weeks)
 3. Identify patterns:
-   - Repeated feedback → should become a skill rule
-   - Recurring manual tasks → automation candidate
-   - Skills producing poor results → need refinement
-   - Common architectural patterns emerging → should be documented
-4. Generate enhancement proposals ranked by impact
+   - **Repeated feedback** → should become a rule in CLAUDE.md
+   - **Recurring manual tasks** → worth documenting as a workflow in CLAUDE.md
+   - **Common architectural patterns emerging** → should be documented in CLAUDE.md
+   - **Frequent mistakes or corrections** → add guard rules to CLAUDE.md
+4. Generate proposals ranked by impact
 5. Present to user for approval
 
-## Phase 4: Cleanup
+### 2.2 Cross-Project Insights
 
-### 4.1 Auto-Fix (low risk, verifiable)
+If the project has a parent CLAUDE.md (monorepo or workspace):
 
-These are applied automatically:
-- Update domain lists in CLAUDE.md to match `src/domain/`
+1. Read memory files from sibling projects under the same parent directory
+2. Look for patterns that repeat across projects:
+   - Same feedback given in multiple projects → belongs in parent CLAUDE.md
+   - Same workarounds applied → should be a shared rule
+   - Conventions that emerged independently → formalize in parent CLAUDE.md
+3. Propose updates to the parent CLAUDE.md (never to sibling project files)
+
+### 2.3 CLAUDE.md Completeness
+
+Compare what's documented vs what the codebase actually does:
+- Are there undocumented conventions the code follows consistently?
+- Are there utility functions/hooks widely used but not mentioned?
+- Are there testing patterns or data-fetching patterns worth documenting?
+
+Propose additions to CLAUDE.md for anything that would help Claude work more effectively in this project.
+
+## Phase 3: Cleanup
+
+### 3.1 Auto-Fix (low risk, verifiable)
+
+Applied automatically:
+- Update domain/module lists in CLAUDE.md to match actual directory structure
 - Fix stale file paths in CLAUDE.md
 - Archive completed plans to `.claude/plans/archive/`
 
-### 4.2 Ask First (subjective or significant)
+### 3.2 Ask First (subjective or significant)
 
-These are presented for approval:
+Presented for approval:
 - Removing stale memory entries
-- Modifying skill content
 - Moving content between parent/project CLAUDE.md
-- Suggesting new skills
+- Adding new rules or sections to CLAUDE.md
+- Removing outdated rules from CLAUDE.md
 
 ## Presenting Findings
 
@@ -143,7 +124,7 @@ For each issue found, present:
 - **What's wrong**: The specific inconsistency
 - **Where**: Which file(s) are affected
 - **Proposed fix**: The concrete change
-- **Impact**: How this affects behavior
+- **Impact**: How this affects Claude's behavior
 
 Categorize as:
 - **Critical** — causes errors, broken paths, missing principles
@@ -151,16 +132,6 @@ Categorize as:
 - **Stale** — outdated references
 - **Duplication** — rules repeated across levels
 - **Cleanup** — plans/prompts/memory that can be archived
-- **Improvement** — opportunities to enhance effectiveness
+- **Improvement** — opportunities to enhance CLAUDE.md effectiveness
 
 Wait for user approval before making changes (except auto-fix tier).
-
-## Source Repo Sync
-
-craft-skills is installed from the marketplace copy (`~/.claude/plugins/marketplaces/craft-skills/`) but the source repo may live elsewhere. After applying ANY changes to skill files or references:
-
-1. Copy all modified/new files from the marketplace copy to the source repo
-2. Verify with `diff -rq` that both directories are in sync
-3. Report the git status of the source repo so the user can commit when ready
-
-This ensures changes made during reflect are not lost and can be pushed to the remote.
