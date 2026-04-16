@@ -86,7 +86,7 @@ for ref_path in ref_paths:
         ref_total += len(content)
 os.unlink(ref_list_file)
 
-SYSTEM_PROMPT = """You are a senior developer implementing code for a project. Read the reference files and shared state to understand the architecture and conventions.
+SYSTEM_PROMPT = """You are a senior developer implementing code for a project.
 
 ## Rules
 - Follow existing patterns exactly as shown in the reference files
@@ -95,6 +95,15 @@ SYSTEM_PROMPT = """You are a senior developer implementing code for a project. R
 - Respect architecture module boundaries
 - Use the write_file tool to create/modify files
 - Use read_file, list_dir, search_code to explore the codebase when needed
+
+## Signature Verification (REQUIRED before write_file)
+Before calling write_file on a file that imports custom components/enums/utils from the codebase: if the task description doesn't show you the exact prop interface, default-vs-named export, or enum members — read_file the source ONCE to confirm. Cap reads at 1-2 per file you're about to write.
+
+Common pitfalls to verify:
+- Component prop names (e.g. `fulfillmentStatus` not `status`, `orderSource` not `source`)
+- Default vs named exports (e.g. `import OrdersPageSkeleton from './X'` not `import { OrdersPageSkeleton }`)
+- Enum members (e.g. DateFormats has SHORT/LONG/SYSTEM/DETAILED — NOT DISPLAY)
+- Whether a component is re-exported from a barrel `@/domain/X/ui/index.ts`
 
 ## Output Format
 After completing your work, you MUST end with a STATUS block in this exact format:
