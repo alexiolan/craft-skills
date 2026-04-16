@@ -176,7 +176,28 @@ For each non-integration task:
    - Task <id> (<description>): GEMMA → <status> [→ SONNET <action>] ✓
    ```
 
-9. **Clean up**: Delete `.llm-task-<task-id>.txt`
+9. **Log Sonnet escalations** (for future Gemma improvements):
+
+   Whenever you escalate to Sonnet (micro-fix or full redo), append a line to `.gemma-escalations.log` at project root:
+   ```
+   <ISO-timestamp> | <task-id> | <gemma-status> | <gemma-severity> | <reason-category> | <files-touched>
+   ```
+
+   Reason categories (use the most specific that applies):
+   - `prop-name-mismatch` — Gemma used wrong prop name (e.g. `status` vs `fulfillmentStatus`)
+   - `enum-member-missing` — referenced enum/constant member that doesn't exist
+   - `import-default-vs-named` — wrong import style (`{X}` vs `X`)
+   - `missing-barrel-export` — imported from `domain/X/ui` but component not re-exported there
+   - `wrong-type-shape` — passed wrong shape to a typed param
+   - `missing-translation-key` — used i18n key that doesn't exist
+   - `lint-not-autofixable` — lint error eslint --fix couldn't resolve
+   - `task-misunderstood` — Gemma did wrong thing entirely
+   - `truncation` — STATUS block missing/malformed (JSON-schema fallback didn't help)
+   - `other` — describe in <reason-category> field
+
+   This log is read by `/reflect` periodically to identify patterns worth fixing in `llm-implement.sh` SYSTEM_PROMPT or develop dispatch rules. Don't worry about parsing precision — just one line per escalation, semicolons fine in description fields.
+
+10. **Clean up**: Delete `.llm-task-<task-id>.txt`
 
 **Hard rules:**
 1. UI components always stay on Claude in `claude+codex` profiles. In `claude+ace`, Gemma gets first shot with Sonnet fallback.
