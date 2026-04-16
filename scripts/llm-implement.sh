@@ -367,17 +367,69 @@ for i in range(MAX_ITERATIONS):
                 "notes": notes_val
             }))
         else:
-            # No STATUS block — treat as DONE_WITH_CONCERNS
-            print(json.dumps({
-                "status": "DONE_WITH_CONCERNS",
-                "severity": "minor",
-                "summary": f"Completed but no STATUS block found. {len(files_written)} file(s) written.",
-                "files_changed": files_written,
-                "exports_added": [],
-                "dependencies_added": [],
-                "concerns": "LLM did not produce a STATUS block. Files were written but status is uncertain.",
-                "notes": content[:500] if content else ""
-            }))
+            # No STATUS block via regex — fall back to JSON Schema mode
+            # This handles cases where Gemma's STATUS block was malformed or truncated.
+            schema_messages = list(messages) + [{
+                "role": "user",
+                "content": "Output the implementation status as JSON conforming to the schema. Be honest about status (DONE if everything compiled, DONE_WITH_CONCERNS if minor issues remain, BLOCKED if you couldn't complete)."
+            }]
+            schema_payload = json.dumps({
+                "model": model,
+                "max_tokens": 1024,
+                "messages": schema_messages,
+                "temperature": 0.1,
+                "top_p": 0.95,
+                "top_k": 64,
+                "min_p": 0.0,
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "implement_status",
+                        "strict": True,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "status": {"type": "string", "enum": ["DONE", "DONE_WITH_CONCERNS", "NEEDS_CONTEXT", "BLOCKED"]},
+                                "severity": {"type": "string", "enum": ["none", "minor", "major"]},
+                                "files_changed": {"type": "array", "items": {"type": "string"}},
+                                "exports_added": {"type": "array", "items": {"type": "string"}},
+                                "concerns": {"type": "string"},
+                                "notes": {"type": "string"}
+                            },
+                            "required": ["status", "severity", "files_changed", "exports_added", "concerns", "notes"]
+                        }
+                    }
+                }
+            }).encode()
+            schema_req = urllib.request.Request(f"{url}/v1/chat/completions", data=schema_payload, headers={"Content-Type": "application/json"})
+            try:
+                schema_resp = json.loads(urllib.request.urlopen(schema_req, timeout=180).read())
+                schema_content = schema_resp["choices"][0]["message"].get("content", "{}")
+                parsed = json.loads(schema_content)
+                metrics["json_schema_fallback"] = True
+                print(json.dumps({
+                    "status": parsed.get("status", "DONE_WITH_CONCERNS"),
+                    "severity": parsed.get("severity", "minor"),
+                    "summary": f"Implemented task with {len(files_written)} file(s) written (status via JSON schema fallback)",
+                    "files_changed": parsed.get("files_changed") or files_written,
+                    "exports_added": parsed.get("exports_added", []),
+                    "dependencies_added": [],
+                    "concerns": parsed.get("concerns", ""),
+                    "notes": parsed.get("notes", "")
+                }))
+            except Exception as schema_err:
+                # Even JSON schema failed — last-resort default
+                metrics["json_schema_fallback"] = f"failed: {schema_err}"
+                print(json.dumps({
+                    "status": "DONE_WITH_CONCERNS",
+                    "severity": "minor",
+                    "summary": f"Completed but STATUS block + JSON fallback both failed. {len(files_written)} file(s) written.",
+                    "files_changed": files_written,
+                    "exports_added": [],
+                    "dependencies_added": [],
+                    "concerns": f"LLM did not produce STATUS block, JSON fallback also failed: {schema_err}",
+                    "notes": content[:500] if content else ""
+                }))
         break
 
     # Execute tool calls
