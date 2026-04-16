@@ -300,7 +300,7 @@ for i in range(MAX_ITERATIONS):
 
     data = json.dumps({
         "model": model,
-        "max_tokens": 32768,
+        "max_tokens": 8192,
         "messages": messages,
         "tools": TOOLS,
         "temperature": 0.6 if use_think else 0.3,
@@ -313,7 +313,7 @@ for i in range(MAX_ITERATIONS):
     )
 
     try:
-        resp = json.loads(urllib.request.urlopen(req, timeout=180).read())
+        resp = json.loads(urllib.request.urlopen(req, timeout=600).read())
     except Exception as e:
         print(json.dumps({
             "status": "BLOCKED", "severity": "major",

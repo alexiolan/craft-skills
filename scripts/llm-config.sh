@@ -6,7 +6,7 @@
 
 export LLM_MODEL="${LLM_MODEL:-google/gemma-4-26b-a4b}"
 export LLM_URL="${LLM_URL:-http://127.0.0.1:1234}"
-export LLM_CONTEXT_LENGTH="${LLM_CONTEXT_LENGTH:-65536}"
+export LLM_CONTEXT_LENGTH="${LLM_CONTEXT_LENGTH:-131072}"
 export LMS="${LMS:-${HOME}/.lmstudio/bin/lms}"
 
 # Extract short model name for grep matching (e.g., "google/gemma-4-26b-a4b" → "gemma-4-26b-a4b")
