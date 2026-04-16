@@ -133,7 +133,7 @@ For each non-integration task:
    - `**/data/models/*.ts`, `**/data/enums/*.ts`, `**/data/schemas/*.ts`, `**/data/infrastructure/*Service.ts`, `**/data/queries/*Queries.ts`, `**/data/mappers/*.ts` → Data layer → Gemma
    - `**/feature/**`, `**/ui/**` → UI component → Gemma (with Sonnet fallback)
    - Tasks the plan explicitly marks as "integration" → Opus agent
-   - Multi-file tasks within same domain/layer → dispatch as one Gemma task. Cross-layer → split into sub-tasks.
+   - Multi-file tasks within same domain/layer → dispatch as one Gemma task, **up to ~7 files per dispatch for mechanical/pattern-following changes** (validated empirically: 7-file scope completes in ~135s with clean TS, ~92k prompt tokens). For non-mechanical tasks (new architecture, complex refactors) keep batches smaller. Cross-layer → split into sub-tasks.
 
 2. **Select reference files** using graph-first algorithm:
    - Use `semantic_search_nodes_tool` to find a similar existing file (same type, different domain)
@@ -154,11 +154,20 @@ For each non-integration task:
 
    | Status | Severity | Action |
    |---|---|---|
-   | `DONE` | `none` | Run `npx tsc --noEmit` + `npm run lint` on changed files. Clean → accept. Errors → dispatch Sonnet micro-fix agent |
-   | `DONE_WITH_CONCERNS` | `minor` | Dispatch Sonnet micro-fix agent (sonnet model, inline prompt: "Fix the following lint/tsc errors. Make minimal changes. Reference: {ref-file}. Errors: {lint-output}. Files: {file-list}") |
+   | `DONE` | `none` | Run auto-fix first (see below), then `npx tsc --noEmit` + `npm run lint`. Clean → accept. Remaining errors → dispatch Sonnet micro-fix agent |
+   | `DONE_WITH_CONCERNS` | `minor` | Run auto-fix first (see below), then check. Remaining errors → dispatch Sonnet micro-fix agent (sonnet model, inline prompt: "Fix the following lint/tsc errors. Make minimal changes. Reference: {ref-file}. Errors: {lint-output}. Files: {file-list}") |
    | `DONE_WITH_CONCERNS` | `major` | Dispatch Sonnet full redo agent (sonnet model, same task + reference files + Gemma's written files as context) |
    | `NEEDS_CONTEXT` | any | Add missing context to task file, re-dispatch to Gemma (once). Second failure → Sonnet full redo |
    | `BLOCKED` | any | Dispatch Sonnet full redo agent |
+
+   **Auto-fix step (for `DONE` and `DONE_WITH_CONCERNS` with severity `minor`):**
+
+   Gemma consistently produces minor lint issues (import ordering, whitespace artifacts) that are trivially auto-fixable. Run this before checking for errors — only escalate to Sonnet if auto-fix doesn't resolve them:
+
+   ```bash
+   npx eslint --fix <changed-files> 2>/dev/null
+   npx prettier --write <changed-files> 2>/dev/null
+   ```
 
 7. **Update shared state** on Gemma's behalf: parse `files_changed`, `exports_added`, `notes` from JSON and append to `.shared-state.md`
 
