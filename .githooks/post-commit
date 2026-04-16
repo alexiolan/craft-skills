@@ -1,6 +1,13 @@
 #!/bin/bash
 
-# Auto-create a git tag matching the version after each commit
+# Auto-create a git tag and GitHub release matching the version after each commit
+# ONLY on the main branch — feature-branch commits don't create tags or releases.
+# Tags + releases are created when a PR is merged into main (which triggers a commit on main here).
+
+CURRENT_BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
+if [ "$CURRENT_BRANCH" != "main" ] && [ "$CURRENT_BRANCH" != "master" ]; then
+  exit 0
+fi
 
 PACKAGE_JSON="package.json"
 

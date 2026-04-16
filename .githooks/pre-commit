@@ -1,6 +1,12 @@
 #!/bin/bash
 
 # Auto-bump patch version in package.json, plugin.json, and marketplace.json on each commit
+# ONLY on the main branch — feature-branch commits stay version-stable until PR merge.
+
+CURRENT_BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
+if [ "$CURRENT_BRANCH" != "main" ] && [ "$CURRENT_BRANCH" != "master" ]; then
+  exit 0
+fi
 
 PACKAGE_JSON="package.json"
 PLUGIN_JSON=".claude-plugin/plugin.json"
