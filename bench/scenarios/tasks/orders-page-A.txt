@@ -1,0 +1,42 @@
+Implement the UI layer for an /orders page in the PNH dashboard.
+
+Create exactly these 4 files following the reference patterns shown:
+
+## File 1: src/domain/orders/ui/OrdersTable.tsx
+
+'use client' component, props `{ orders: Order[] }`. (Don't include unused props.)
+
+Render DaisyUI `table-sm table` with columns:
+- Order # (use `order.name`)
+- Date (formatted from `order.processedAt`)
+- Status (use `<OrderStatus>` from `@/domain/orders/ui` — verify exact prop name)
+- Source (use `<OrderSourceBadge>` from `@/domain/orders/ui` — verify exact prop name)
+- Items (use `<ProductThumbnails>` from `@/domain/orders/ui` — verify it's exported from there)
+- Total (use formatCurrency from `@/domain/shared/utils`)
+
+Use `useTranslations('orders.table')` for column headers. Date format helper is in `@/domain/shared/utils/date` — verify the available DateFormats members.
+
+Default-export. Mirror the structure of RevenueTable.tsx.
+
+## File 2: src/domain/orders/feature/OrdersPageSkeleton.tsx
+
+'use client' component, no props. Mirror CommissionsPageSkeleton.tsx (DaisyUI skeleton classes for header + table area). Default-export.
+
+## File 3: src/domain/orders/feature/OrdersPageContent.tsx
+
+'use client' component, no props. Mirror CommissionsPageContent.tsx pattern.
+
+- Local state: page (default 1), pageSize=20
+- Use OrdersQueries.SearchOrders.useQuery({ page, pageSize, sortKey: 'PROCESSED_AT', reverse: true }, { placeholderData: keepPreviousData })
+- Header h1 with translation key 'orders.pageTitle' + description 'orders.pageDescription'
+- Loading → <OrdersPageSkeleton />
+- Error → <ErrorAlert message={t('errorLoading')} /> (from @/domain/shared/ui)
+- Success → <OrdersTable orders={data.items} /> + Prev/Next pagination buttons disabled by data.hasPreviousPage / data.hasNextPage
+
+Default-export.
+
+## File 4: src/domain/orders/feature/index.ts
+
+New file. Single line: `export { default as OrdersPageContent } from './OrdersPageContent'`
+
+End with the STATUS block.

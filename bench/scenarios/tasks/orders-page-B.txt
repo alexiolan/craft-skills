@@ -1,0 +1,35 @@
+Add /orders page integration:
+
+## File 1: src/domain/orders/ui/index.ts (MODIFY)
+
+Read existing file. Add two new exports while preserving all existing ones:
+- `export { default as OrdersTable } from './OrdersTable'`
+- `export { default as ProductThumbnails } from './ProductThumbnails'`
+
+## File 2: src/app/(authenticated)/(practitioner-only)/orders/page.tsx (NEW)
+
+Mirror commissions/page.tsx exactly. Content:
+
+```tsx
+import { OrdersPageContent } from '@/domain/orders/feature'
+
+export default function OrdersPage() {
+  return <OrdersPageContent />
+}
+```
+
+## File 3: src/config/routing.ts (MODIFY)
+
+Read existing file. Add to dashboardRouteItems array AFTER the commissions entry:
+```ts
+{
+  title: 'orders',
+  link: '/orders',
+  icon: 'package',
+  practitionerOnly: true,
+},
+```
+
+Preserve all other entries (welcome, dashboard, clients, commissions) and other arrays (profileMenuItems, headerNavItems, allRouteLists).
+
+End with the STATUS block.

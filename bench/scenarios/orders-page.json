@@ -1,0 +1,50 @@
+{
+  "name": "orders-page",
+  "description": "Add a paginated /orders page to the PNH dashboard. Tests multi-file dispatch with custom-component imports (high signature-verification value).",
+  "project_root": "/Users/alex/Projects/frontend/pnh-dashboard-app-new",
+  "cleanup_paths": [
+    "src/domain/orders/feature",
+    "src/app/(authenticated)/(practitioner-only)/orders",
+    "src/domain/orders/ui/OrdersTable.tsx"
+  ],
+  "git_revert_paths": [
+    "src/domain/orders/ui/index.ts",
+    "src/config/routing.ts"
+  ],
+  "dispatches": [
+    {
+      "id": "A-ui-layer",
+      "task_file": "tasks/orders-page-A.txt",
+      "allowed_files": [
+        "src/domain/orders/ui/OrdersTable.tsx",
+        "src/domain/orders/feature/OrdersPageSkeleton.tsx",
+        "src/domain/orders/feature/OrdersPageContent.tsx",
+        "src/domain/orders/feature/index.ts"
+      ],
+      "ref_files": [
+        "src/domain/commissions/feature/CommissionsPageContent.tsx",
+        "src/domain/commissions/feature/CommissionsPageSkeleton.tsx",
+        "src/domain/commissions/ui/RevenueTable.tsx"
+      ]
+    },
+    {
+      "id": "B-integration",
+      "task_file": "tasks/orders-page-B.txt",
+      "allowed_files": [
+        "src/domain/orders/ui/index.ts",
+        "src/app/(authenticated)/(practitioner-only)/orders/page.tsx",
+        "src/config/routing.ts"
+      ],
+      "ref_files": [
+        "src/domain/orders/ui/index.ts",
+        "src/config/routing.ts",
+        "src/app/(authenticated)/(practitioner-only)/commissions/page.tsx"
+      ]
+    }
+  ],
+  "verify": {
+    "tsc": true,
+    "eslint_fix": true,
+    "prettier": true
+  }
+}
