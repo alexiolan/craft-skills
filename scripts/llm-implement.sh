@@ -86,7 +86,7 @@ for ref_path in ref_paths:
         ref_total += len(content)
 os.unlink(ref_list_file)
 
-SYSTEM_PROMPT = """You are a senior developer implementing code for a project. Read the reference files and shared state to understand the architecture and conventions.
+SYSTEM_PROMPT = """You are a senior developer implementing code for a project.
 
 ## Rules
 - Follow existing patterns exactly as shown in the reference files
@@ -95,6 +95,15 @@ SYSTEM_PROMPT = """You are a senior developer implementing code for a project. R
 - Respect architecture module boundaries
 - Use the write_file tool to create/modify files
 - Use read_file, list_dir, search_code to explore the codebase when needed
+
+## Signature Verification (REQUIRED before write_file)
+Before calling write_file on a file that imports custom components/enums/utils from the codebase: if the task description doesn't show you the exact prop interface, default-vs-named export, or enum members — read_file the source ONCE to confirm. Cap reads at 1-2 per file you're about to write.
+
+Common pitfalls to verify:
+- Component prop names (e.g. `fulfillmentStatus` not `status`, `orderSource` not `source`)
+- Default vs named exports (e.g. `import OrdersPageSkeleton from './X'` not `import { OrdersPageSkeleton }`)
+- Enum members (e.g. DateFormats has SHORT/LONG/SYSTEM/DETAILED — NOT DISPLAY)
+- Whether a component is re-exported from a barrel `@/domain/X/ui/index.ts`
 
 ## Output Format
 After completing your work, you MUST end with a STATUS block in this exact format:
@@ -175,33 +184,6 @@ TOOLS = [
                 "required": ["path", "content"]
             }
         }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "git_log",
-            "description": "Show git commit history.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "File or directory to show history for"},
-                    "count": {"type": "integer", "description": "Number of commits to show (default: 10)"}
-                }
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "git_diff",
-            "description": "Show changes in the working directory or between commits.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "ref": {"type": "string", "description": "Git ref to diff against"}
-                }
-            }
-        }
     }
 ]
 
@@ -267,23 +249,6 @@ def execute_tool(name, args):
             files_written.append(rel_path)
             return f"OK: wrote {len(args['content'])} chars to {rel_path}"
 
-        elif name == "git_log":
-            cmd = ["git", "-C", workdir, "log", "--oneline",
-                   f"-{args.get('count', 10)}"]
-            path = args.get("path", "")
-            if path:
-                cmd += ["--", path]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-            return result.stdout or "No git history found"
-
-        elif name == "git_diff":
-            ref = args.get("ref", "")
-            cmd = ["git", "-C", workdir, "diff", "--stat"]
-            if ref:
-                cmd.append(ref)
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-            return result.stdout or "No changes found"
-
     except Exception as e:
         return f"Error: {e}"
 
@@ -295,16 +260,43 @@ messages = [
 MAX_ITERATIONS = 25
 total_tool_content = 0
 
+import time
+metrics = {
+    "iterations": 0,
+    "tool_calls": {},
+    "iteration_timings_s": [],
+    "iteration_prompt_tokens": [],
+    "iteration_completion_tokens": [],
+    "total_prompt_tokens": 0,
+    "total_completion_tokens": 0,
+    "exit_reason": None,
+    "wall_clock_total_s": None,
+}
+_metrics_start = time.time()
+
+def _emit_metrics():
+    metrics["wall_clock_total_s"] = round(time.time() - _metrics_start, 2)
+    metrics_path = os.environ.get("LLM_METRICS_FILE")
+    if metrics_path:
+        try:
+            with open(metrics_path, "w") as f:
+                json.dump(metrics, f, indent=2)
+        except Exception:
+            pass
+    print(f"METRICS: {json.dumps(metrics)}", file=sys.stderr)
+
 for i in range(MAX_ITERATIONS):
     use_think = total_tool_content < 20000
 
     data = json.dumps({
         "model": model,
-        "max_tokens": 32768,
+        "max_tokens": 8192,
         "messages": messages,
         "tools": TOOLS,
         "temperature": 0.6 if use_think else 0.3,
-        "top_p": 0.95
+        "top_p": 0.95,
+        "top_k": 64,
+        "min_p": 0.0
     }).encode()
 
     req = urllib.request.Request(
@@ -312,9 +304,12 @@ for i in range(MAX_ITERATIONS):
         headers={"Content-Type": "application/json"}
     )
 
+    _iter_start = time.time()
     try:
-        resp = json.loads(urllib.request.urlopen(req, timeout=180).read())
+        resp = json.loads(urllib.request.urlopen(req, timeout=600).read())
     except Exception as e:
+        metrics["exit_reason"] = f"api_error: {e}"
+        _emit_metrics()
         print(json.dumps({
             "status": "BLOCKED", "severity": "major",
             "summary": f"LLM API error: {e}",
@@ -323,12 +318,22 @@ for i in range(MAX_ITERATIONS):
         }))
         sys.exit(0)
 
+    metrics["iterations"] += 1
+    metrics["iteration_timings_s"].append(round(time.time() - _iter_start, 2))
+    _usage = resp.get("usage", {})
+    metrics["iteration_prompt_tokens"].append(_usage.get("prompt_tokens", 0))
+    metrics["iteration_completion_tokens"].append(_usage.get("completion_tokens", 0))
+    metrics["total_prompt_tokens"] += _usage.get("prompt_tokens", 0)
+    metrics["total_completion_tokens"] += _usage.get("completion_tokens", 0)
+
     choice = resp["choices"][0]
     msg = choice["message"]
     messages.append(msg)
 
     tool_calls = msg.get("tool_calls", [])
     if not tool_calls:
+        metrics["exit_reason"] = "final_answer"
+        _emit_metrics()
         # Final answer — parse STATUS block
         content = msg.get("content", "") or msg.get("reasoning_content", "")
         status_match = re.search(r'--- STATUS ---\s*\n(.*?)\n--- END STATUS ---', content, re.DOTALL)
@@ -362,17 +367,69 @@ for i in range(MAX_ITERATIONS):
                 "notes": notes_val
             }))
         else:
-            # No STATUS block — treat as DONE_WITH_CONCERNS
-            print(json.dumps({
-                "status": "DONE_WITH_CONCERNS",
-                "severity": "minor",
-                "summary": f"Completed but no STATUS block found. {len(files_written)} file(s) written.",
-                "files_changed": files_written,
-                "exports_added": [],
-                "dependencies_added": [],
-                "concerns": "LLM did not produce a STATUS block. Files were written but status is uncertain.",
-                "notes": content[:500] if content else ""
-            }))
+            # No STATUS block via regex — fall back to JSON Schema mode
+            # This handles cases where Gemma's STATUS block was malformed or truncated.
+            schema_messages = list(messages) + [{
+                "role": "user",
+                "content": "Output the implementation status as JSON conforming to the schema. Be honest about status (DONE if everything compiled, DONE_WITH_CONCERNS if minor issues remain, BLOCKED if you couldn't complete)."
+            }]
+            schema_payload = json.dumps({
+                "model": model,
+                "max_tokens": 1024,
+                "messages": schema_messages,
+                "temperature": 0.1,
+                "top_p": 0.95,
+                "top_k": 64,
+                "min_p": 0.0,
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "implement_status",
+                        "strict": True,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "status": {"type": "string", "enum": ["DONE", "DONE_WITH_CONCERNS", "NEEDS_CONTEXT", "BLOCKED"]},
+                                "severity": {"type": "string", "enum": ["none", "minor", "major"]},
+                                "files_changed": {"type": "array", "items": {"type": "string"}},
+                                "exports_added": {"type": "array", "items": {"type": "string"}},
+                                "concerns": {"type": "string"},
+                                "notes": {"type": "string"}
+                            },
+                            "required": ["status", "severity", "files_changed", "exports_added", "concerns", "notes"]
+                        }
+                    }
+                }
+            }).encode()
+            schema_req = urllib.request.Request(f"{url}/v1/chat/completions", data=schema_payload, headers={"Content-Type": "application/json"})
+            try:
+                schema_resp = json.loads(urllib.request.urlopen(schema_req, timeout=180).read())
+                schema_content = schema_resp["choices"][0]["message"].get("content", "{}")
+                parsed = json.loads(schema_content)
+                metrics["json_schema_fallback"] = True
+                print(json.dumps({
+                    "status": parsed.get("status", "DONE_WITH_CONCERNS"),
+                    "severity": parsed.get("severity", "minor"),
+                    "summary": f"Implemented task with {len(files_written)} file(s) written (status via JSON schema fallback)",
+                    "files_changed": parsed.get("files_changed") or files_written,
+                    "exports_added": parsed.get("exports_added", []),
+                    "dependencies_added": [],
+                    "concerns": parsed.get("concerns", ""),
+                    "notes": parsed.get("notes", "")
+                }))
+            except Exception as schema_err:
+                # Even JSON schema failed — last-resort default
+                metrics["json_schema_fallback"] = f"failed: {schema_err}"
+                print(json.dumps({
+                    "status": "DONE_WITH_CONCERNS",
+                    "severity": "minor",
+                    "summary": f"Completed but STATUS block + JSON fallback both failed. {len(files_written)} file(s) written.",
+                    "files_changed": files_written,
+                    "exports_added": [],
+                    "dependencies_added": [],
+                    "concerns": f"LLM did not produce STATUS block, JSON fallback also failed: {schema_err}",
+                    "notes": content[:500] if content else ""
+                }))
         break
 
     # Execute tool calls
@@ -381,12 +438,15 @@ for i in range(MAX_ITERATIONS):
         fn_args = json.loads(tc["function"].get("args") or tc["function"].get("arguments", "{}"))
         result = execute_tool(fn_name, fn_args)
         total_tool_content += len(result)
+        metrics["tool_calls"][fn_name] = metrics["tool_calls"].get(fn_name, 0) + 1
         messages.append({
             "role": "tool",
             "tool_call_id": tc["id"],
             "content": result
         })
 else:
+    metrics["exit_reason"] = "max_iterations"
+    _emit_metrics()
     print(json.dumps({
         "status": "DONE_WITH_CONCERNS", "severity": "minor",
         "summary": f"Max iterations reached. {len(files_written)} file(s) written.",

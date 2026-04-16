@@ -179,6 +179,31 @@ messages = [
 MAX_ITERATIONS = 25
 total_tool_content = 0
 
+import time
+metrics = {
+    "iterations": 0,
+    "tool_calls": {},
+    "iteration_timings_s": [],
+    "iteration_prompt_tokens": [],
+    "iteration_completion_tokens": [],
+    "total_prompt_tokens": 0,
+    "total_completion_tokens": 0,
+    "exit_reason": None,
+    "wall_clock_total_s": None,
+}
+_metrics_start = time.time()
+
+def _emit_metrics():
+    metrics["wall_clock_total_s"] = round(time.time() - _metrics_start, 2)
+    metrics_path = os.environ.get("LLM_METRICS_FILE")
+    if metrics_path:
+        try:
+            with open(metrics_path, "w") as f:
+                json.dump(metrics, f, indent=2)
+        except Exception:
+            pass
+    print(f"METRICS: {json.dumps(metrics)}", file=sys.stderr)
+
 for i in range(MAX_ITERATIONS):
     # Thinking is off (/no_think) for multi-turn agent to prevent context overflow
     # Lower temperature when context grows large for more focused responses
@@ -186,11 +211,13 @@ for i in range(MAX_ITERATIONS):
 
     data = json.dumps({
         "model": model,
-        "max_tokens": 32768,
+        "max_tokens": 4096,
         "messages": messages,
         "tools": TOOLS,
         "temperature": 0.6 if use_think else 0.3,
-        "top_p": 0.95
+        "top_p": 0.95,
+        "top_k": 64,
+        "min_p": 0.0
     }).encode()
 
     req = urllib.request.Request(
@@ -198,11 +225,22 @@ for i in range(MAX_ITERATIONS):
         headers={"Content-Type": "application/json"}
     )
 
+    _iter_start = time.time()
     try:
-        resp = json.loads(urllib.request.urlopen(req, timeout=120).read())
+        resp = json.loads(urllib.request.urlopen(req, timeout=600).read())
     except Exception as e:
+        metrics["exit_reason"] = f"api_error: {e}"
+        _emit_metrics()
         print(f"LLM_ERROR: {e}", file=sys.stderr)
         sys.exit(1)
+
+    metrics["iterations"] += 1
+    metrics["iteration_timings_s"].append(round(time.time() - _iter_start, 2))
+    _usage = resp.get("usage", {})
+    metrics["iteration_prompt_tokens"].append(_usage.get("prompt_tokens", 0))
+    metrics["iteration_completion_tokens"].append(_usage.get("completion_tokens", 0))
+    metrics["total_prompt_tokens"] += _usage.get("prompt_tokens", 0)
+    metrics["total_completion_tokens"] += _usage.get("completion_tokens", 0)
 
     choice = resp["choices"][0]
     msg = choice["message"]
@@ -211,6 +249,8 @@ for i in range(MAX_ITERATIONS):
     # Check if model wants to call tools
     tool_calls = msg.get("tool_calls", [])
     if not tool_calls:
+        metrics["exit_reason"] = "final_answer"
+        _emit_metrics()
         # No tool calls — this is the final answer
         content = msg.get("content", "")
         reasoning = msg.get("reasoning_content", "")
@@ -229,12 +269,15 @@ for i in range(MAX_ITERATIONS):
         fn_args = json.loads(tc["function"]["args"] if "args" in tc["function"] else tc["function"].get("arguments", "{}"))
         result = execute_tool(fn_name, fn_args)
         total_tool_content += len(result)
+        metrics["tool_calls"][fn_name] = metrics["tool_calls"].get(fn_name, 0) + 1
         messages.append({
             "role": "tool",
             "tool_call_id": tc["id"],
             "content": result
         })
 else:
+    metrics["exit_reason"] = "max_iterations"
+    _emit_metrics()
     print("LLM_ERROR: max iterations reached", file=sys.stderr)
     sys.exit(1)
 PYEOF
