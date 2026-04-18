@@ -27,6 +27,19 @@
     },
     "notes": {
       "type": "string"
+    },
+    "deviations": {
+      "type": "string",
+      "description": "Explicit description of any place the executor diverged from task instructions, or empty string if none."
+    },
+    "routing_hint": {
+      "type": "string",
+      "enum": ["", "consider-sonnet"],
+      "description": "Advisory hint from the executor for the orchestrator's routing decisions. Empty when no concern."
+    },
+    "routing_hint_reasons": {
+      "type": "string",
+      "description": "Free-text reason for the routing_hint, e.g. 'single allowed file is 491 LOC'."
     }
   }
 }

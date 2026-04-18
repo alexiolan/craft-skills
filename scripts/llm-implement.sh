@@ -24,18 +24,67 @@ shift 3
 REF_FILES=("$@")
 
 if [ -z "$TASK_FILE" ] || [ -z "$WORKDIR" ] || [ -z "$ALLOWED_FILES" ]; then
-  echo '{"status":"BLOCKED","severity":"major","summary":"Missing required arguments","files_changed":[],"exports_added":[],"dependencies_added":[],"concerns":"Usage: llm-implement.sh <task-file> <working-dir> <allowed-files> [ref-files...]","notes":""}'
+  echo '{"status":"BLOCKED","severity":"major","summary":"Missing required arguments","files_changed":[],"exports_added":[],"dependencies_added":[],"concerns":"Usage: llm-implement.sh <task-file> <working-dir> <allowed-files> [ref-files...]","notes":"","deviations":"","routing_hint":""}'
   exit 0
 fi
 
 if [ ! -f "$TASK_FILE" ]; then
-  echo '{"status":"BLOCKED","severity":"major","summary":"Task file not found","files_changed":[],"exports_added":[],"dependencies_added":[],"concerns":"Task file not found: '"$TASK_FILE"'","notes":""}'
+  echo '{"status":"BLOCKED","severity":"major","summary":"Task file not found","files_changed":[],"exports_added":[],"dependencies_added":[],"concerns":"Task file not found: '"$TASK_FILE"'","notes":"","deviations":"","routing_hint":""}'
   exit 0
 fi
 
+# File-size precheck: large files exceed Gemma's reliable in-place editing range.
+# Empirically a single ~500 LOC file or combined ref+allowed >2500 LOC pushes timeouts.
+# This is ADVISORY (routing_hint) not blocking — the orchestrator decides whether to escalate.
+ROUTING_HINT=""
+PRECHECK_REASONS=""
+MAX_SINGLE_LOC=0
+COMBINED_LOC=0
+IFS=',' read -ra _ALLOWED_PATHS <<< "$ALLOWED_FILES"
+for _f in "${_ALLOWED_PATHS[@]}"; do
+  _full="$WORKDIR/$_f"
+  if [ -f "$_full" ]; then
+    _loc=$(wc -l < "$_full" | tr -d ' ')
+    COMBINED_LOC=$((COMBINED_LOC + _loc))
+    if [ "$_loc" -gt "$MAX_SINGLE_LOC" ]; then
+      MAX_SINGLE_LOC="$_loc"
+    fi
+  fi
+done
+for _ref in "${REF_FILES[@]}"; do
+  if [ -f "$_ref" ]; then
+    _loc=$(wc -l < "$_ref" | tr -d ' ')
+    COMBINED_LOC=$((COMBINED_LOC + _loc))
+  fi
+done
+if [ "$MAX_SINGLE_LOC" -gt 480 ]; then
+  ROUTING_HINT="consider-sonnet"
+  PRECHECK_REASONS="single allowed file is $MAX_SINGLE_LOC LOC (>480 LOC threshold for reliable Gemma in-place editing)"
+fi
+if [ "$COMBINED_LOC" -gt 2500 ]; then
+  ROUTING_HINT="consider-sonnet"
+  if [ -n "$PRECHECK_REASONS" ]; then
+    PRECHECK_REASONS="$PRECHECK_REASONS; combined ref+allowed is $COMBINED_LOC LOC (>2500 LOC threshold)"
+  else
+    PRECHECK_REASONS="combined ref+allowed is $COMBINED_LOC LOC (>2500 LOC threshold)"
+  fi
+fi
+export ROUTING_HINT PRECHECK_REASONS
+
 # Check server
 if ! curl -s --max-time 2 "$LLM_URL" > /dev/null 2>&1; then
-  echo '{"status":"BLOCKED","severity":"major","summary":"LLM unavailable","files_changed":[],"exports_added":[],"dependencies_added":[],"concerns":"LM Studio not running on '"$LLM_URL"'","notes":""}'
+  # Use Python to safely emit JSON (avoids shell-escaping pitfalls when ROUTING_HINT/PRECHECK_REASONS contain special chars)
+  python3 -c "
+import json, os
+print(json.dumps({
+  'status': 'BLOCKED', 'severity': 'major',
+  'summary': 'LLM unavailable',
+  'files_changed': [], 'exports_added': [], 'dependencies_added': [],
+  'concerns': 'LM Studio not running on $LLM_URL',
+  'notes': '', 'deviations': '',
+  'routing_hint': os.environ.get('ROUTING_HINT', ''),
+  'routing_hint_reasons': os.environ.get('PRECHECK_REASONS', '')
+}))"
   exit 0
 fi
 
@@ -115,7 +164,10 @@ files_changed: ["path/to/file1.ts", "path/to/file2.ts"]
 exports_added: ["ExportName1", "ExportName2"]
 concerns: none | description of concerns
 notes: optional notes for orchestrator
+deviations: none | EXPLICIT description of any place you intentionally diverged from the task instructions (e.g. "kept local isValidImageUrl in GenericRssParser because extractImageFromHtml needs a positive-match validator with different semantics than the shared one")
 --- END STATUS ---
+
+**`deviations` is MANDATORY.** If you followed the task verbatim with no judgment calls, write `deviations: none`. If you skipped, renamed, or kept something the task told you to remove/change because doing so verbatim would have broken the build or produced wrong semantics, you MUST describe what you did and WHY. The orchestrator uses this field to spot-check your judgment without re-reading every file.
 
 ## Reference Files (study these patterns)
 """ + REF_CONTENT + """
@@ -314,7 +366,10 @@ for i in range(MAX_ITERATIONS):
             "status": "BLOCKED", "severity": "major",
             "summary": f"LLM API error: {e}",
             "files_changed": files_written, "exports_added": [],
-            "dependencies_added": [], "concerns": str(e), "notes": ""
+            "dependencies_added": [], "concerns": str(e), "notes": "",
+            "deviations": "",
+            "routing_hint": os.environ.get("ROUTING_HINT", ""),
+            "routing_hint_reasons": os.environ.get("PRECHECK_REASONS", "")
         }))
         sys.exit(0)
 
@@ -348,6 +403,7 @@ for i in range(MAX_ITERATIONS):
             severity_val = extract("severity", "minor")
             concerns_val = extract("concerns", "none")
             notes_val = extract("notes", "")
+            deviations_val = extract("deviations", "none")
 
             # Parse array fields
             fc_match = re.search(r'files_changed:\s*\[([^\]]*)\]', status_text)
@@ -355,6 +411,9 @@ for i in range(MAX_ITERATIONS):
 
             ea_match = re.search(r'exports_added:\s*\[([^\]]*)\]', status_text)
             ea = [e.strip().strip('"').strip("'") for e in ea_match.group(1).split(",") if e.strip()] if ea_match else []
+
+            routing_hint = os.environ.get("ROUTING_HINT", "")
+            precheck_reasons = os.environ.get("PRECHECK_REASONS", "")
 
             print(json.dumps({
                 "status": status_val,
@@ -364,7 +423,10 @@ for i in range(MAX_ITERATIONS):
                 "exports_added": ea,
                 "dependencies_added": [],
                 "concerns": concerns_val if concerns_val != "none" else "",
-                "notes": notes_val
+                "notes": notes_val,
+                "deviations": deviations_val if deviations_val != "none" else "",
+                "routing_hint": routing_hint,
+                "routing_hint_reasons": precheck_reasons
             }))
         else:
             # No STATUS block via regex — fall back to JSON Schema mode
@@ -394,9 +456,10 @@ for i in range(MAX_ITERATIONS):
                                 "files_changed": {"type": "array", "items": {"type": "string"}},
                                 "exports_added": {"type": "array", "items": {"type": "string"}},
                                 "concerns": {"type": "string"},
-                                "notes": {"type": "string"}
+                                "notes": {"type": "string"},
+                                "deviations": {"type": "string"}
                             },
-                            "required": ["status", "severity", "files_changed", "exports_added", "concerns", "notes"]
+                            "required": ["status", "severity", "files_changed", "exports_added", "concerns", "notes", "deviations"]
                         }
                     }
                 }
@@ -415,7 +478,10 @@ for i in range(MAX_ITERATIONS):
                     "exports_added": parsed.get("exports_added", []),
                     "dependencies_added": [],
                     "concerns": parsed.get("concerns", ""),
-                    "notes": parsed.get("notes", "")
+                    "notes": parsed.get("notes", ""),
+                    "deviations": parsed.get("deviations", ""),
+                    "routing_hint": os.environ.get("ROUTING_HINT", ""),
+                    "routing_hint_reasons": os.environ.get("PRECHECK_REASONS", "")
                 }))
             except Exception as schema_err:
                 # Even JSON schema failed — last-resort default
@@ -428,7 +494,10 @@ for i in range(MAX_ITERATIONS):
                     "exports_added": [],
                     "dependencies_added": [],
                     "concerns": f"LLM did not produce STATUS block, JSON fallback also failed: {schema_err}",
-                    "notes": content[:500] if content else ""
+                    "notes": content[:500] if content else "",
+                    "deviations": "",
+                    "routing_hint": os.environ.get("ROUTING_HINT", ""),
+                    "routing_hint_reasons": os.environ.get("PRECHECK_REASONS", "")
                 }))
         break
 
@@ -453,6 +522,9 @@ else:
         "files_changed": files_written, "exports_added": [],
         "dependencies_added": [],
         "concerns": "Max iterations (25) reached before LLM produced final answer",
-        "notes": ""
+        "notes": "",
+        "deviations": "",
+        "routing_hint": os.environ.get("ROUTING_HINT", ""),
+        "routing_hint_reasons": os.environ.get("PRECHECK_REASONS", "")
     }))
 PYEOF

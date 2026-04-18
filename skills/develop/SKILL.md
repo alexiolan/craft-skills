@@ -150,6 +150,18 @@ For each non-integration task:
    bash "$CRAFT_SCRIPTS/llm-implement.sh" "$PWD/.llm-task-<task-id>.txt" "$PWD" "<allowed-files-comma-separated>" <ref-file-1> <ref-file-2>
    ```
 
+   **Pre-dispatch routing check (`routing_hint`):** The script does a file-size precheck and emits `routing_hint: "consider-sonnet"` in the output JSON when a single allowed file exceeds 480 LOC or combined ref+allowed exceeds 2500 LOC. **Strongly prefer routing such tasks to a Sonnet agent up front instead of dispatching to Gemma** — empirically Gemma times out on single 491-LOC in-place refactors. To check the hint without paying the dispatch cost, you can run a `wc -l` of the allowed files yourself before calling the script:
+
+   ```bash
+   # Quick check before dispatch — sum LOC of allowed files
+   total=0; for f in <allowed-files-space-separated>; do
+     [ -f "$f" ] && total=$((total + $(wc -l < "$f")))
+   done
+   echo "$total"
+   ```
+
+   If any single allowed file is >480 LOC, skip Gemma and dispatch to Sonnet directly. Document the choice in `.shared-state.md` notes.
+
 6. **Parse JSON output** and route by status:
 
    | Status | Severity | Action |
@@ -169,7 +181,7 @@ For each non-integration task:
    npx prettier --write <changed-files> 2>/dev/null
    ```
 
-7. **Update shared state** on Gemma's behalf: parse `files_changed`, `exports_added`, `notes` from JSON and append to `.shared-state.md`
+7. **Update shared state** on Gemma's behalf: parse `files_changed`, `exports_added`, `notes`, and **`deviations`** from JSON and append to `.shared-state.md`. Mandatory: if `deviations` is non-empty, copy the text into a new entry under `## Notes & Warnings` so future agents (and the integration review in Step 3) see it. A non-empty `deviations` field means Gemma diverged from the task — review the divergence before continuing.
 
 8. **Log dispatch result** in shared state under `## LLM Dispatch Log`:
    ```
@@ -302,22 +314,42 @@ case "$CRAFT_PROFILE" in
 esac
 ```
 
-**Step B — Start LLM review in background (if available AND profile includes llm or ace):**
+**Step B — LLM review (batch first, fall back to per-file on timeout):**
 
-Skip if Step A returned `LLM_SKIPPED_BY_PROFILE` or `LLM_UNAVAILABLE`. Otherwise run with Bash tool (`run_in_background: true`, timeout 300000ms):
+Skip if Step A returned `LLM_SKIPPED_BY_PROFILE` or `LLM_UNAVAILABLE`.
+
+**B1 — Try the broad multi-file review with a SHORT timeout (90s).** Empirically `llm-agent.sh` with a multi-file scope often times out — but when it succeeds, it can spot cross-file inconsistencies that per-file reviews miss. Try once, fast:
 
 ```bash
 CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
 case "$CRAFT_PROFILE" in
   *llm*|"claude+ace")
     CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
-    bash "$CRAFT_SCRIPTS/llm-agent.sh" "Review these files for bugs, missing imports, type mismatches, pattern violations, and architecture boundary violations: [file list from .shared-state.md or graph results]." <project-root>
-    bash "$CRAFT_SCRIPTS/llm-unload.sh"
+    bash "$CRAFT_SCRIPTS/llm-agent.sh" "Review these files for bugs, missing imports, type mismatches, pattern violations, architecture boundary violations, and security/safety issues: [file list from .shared-state.md or graph results]. Be concise." "$PROJECT_ROOT"
     ;;
   *)
     echo "LLM_REVIEW_SKIPPED_BY_PROFILE"
     ;;
 esac
+```
+
+Run this with Bash tool `timeout: 90000` (90s, NOT the old 300s). If it returns within budget, use the findings.
+
+**B2 — Per-file fallback (if B1 timed out or errored).** Iterate over the "Created / Modified Files" section in `.shared-state.md` and run a focused single-file review for each via `llm-review.sh` (sequential — Gemma can't reliably handle parallel LM Studio requests):
+
+```bash
+CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-review.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
+for f in <space-separated-file-paths-from-shared-state>; do
+  bash "$CRAFT_SCRIPTS/llm-review.sh" "$f" "bugs, missing imports, type mismatches, pattern violations, security/safety"
+done
+```
+
+Each per-file review usually completes in 30–60s. Aggregate findings from all files before triaging.
+
+**B3 — Unload model after either B1 success or B2 completion:**
+
+```bash
+bash "$CRAFT_SCRIPTS/llm-unload.sh"
 ```
 
 If Step A returned `LLM_UNAVAILABLE` (but profile includes llm), fall back to reading only integration/wiring files.
