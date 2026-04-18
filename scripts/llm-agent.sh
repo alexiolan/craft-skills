@@ -172,8 +172,12 @@ def execute_tool(name, args):
     except Exception as e:
         return f"Error: {e}"
 
+# Split stable instructions from variable task for better prefix-cache hit rate.
+# System message is fully static → cached across sessions.
+# User message keeps workdir (semi-static per project) before task (fully variable).
 messages = [
-    {"role": "user", "content": f"/no_think\n{task}\n\nYou have tools to read files, search code, and check git history. Use them to investigate, then give a concise final answer. Be efficient — don't read files you don't need. Working directory: {workdir}"}
+    {"role": "system", "content": "/no_think\nYou have tools to read files, search code, and check git history. Use them to investigate, then give a concise final answer. Be efficient — don't read files you don't need."},
+    {"role": "user", "content": f"Working directory: {workdir}\n\nTask: {task}"}
 ]
 
 MAX_ITERATIONS = 25

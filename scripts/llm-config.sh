@@ -16,7 +16,7 @@ export LLM_TEMPERATURE_LONG_CTX="${LLM_TEMPERATURE_LONG_CTX:-0.3}"
 export LLM_TOP_P="${LLM_TOP_P:-0.95}"
 export LLM_TOP_K="${LLM_TOP_K:-60}"
 export LLM_MIN_P="${LLM_MIN_P:-0.0}"
-export LLM_LONG_CTX_THRESHOLD="${LLM_LONG_CTX_THRESHOLD:-20000}"
+export LLM_LONG_CTX_THRESHOLD="${LLM_LONG_CTX_THRESHOLD:-80000}"
 
 # Per-use-case max_tokens (thinking tokens count against this budget)
 export LLM_MAX_TOKENS_ANALYZE="${LLM_MAX_TOKENS_ANALYZE:-16384}"
