@@ -172,8 +172,12 @@ def execute_tool(name, args):
     except Exception as e:
         return f"Error: {e}"
 
+# Split stable instructions from variable task for better prefix-cache hit rate.
+# System message is fully static → cached across sessions.
+# User message keeps workdir (semi-static per project) before task (fully variable).
 messages = [
-    {"role": "user", "content": f"/no_think\n{task}\n\nYou have tools to read files, search code, and check git history. Use them to investigate, then give a concise final answer. Be efficient — don't read files you don't need. Working directory: {workdir}"}
+    {"role": "system", "content": "/no_think\nYou have tools to read files, search code, and check git history. Use them to investigate, then give a concise final answer. Be efficient — don't read files you don't need."},
+    {"role": "user", "content": f"Working directory: {workdir}\n\nTask: {task}"}
 ]
 
 MAX_ITERATIONS = 25
@@ -204,20 +208,24 @@ def _emit_metrics():
             pass
     print(f"METRICS: {json.dumps(metrics)}", file=sys.stderr)
 
+LONG_CTX_THRESHOLD = int(os.environ.get("LLM_LONG_CTX_THRESHOLD", "20000"))
+TEMP_DEFAULT = float(os.environ.get("LLM_TEMPERATURE", "0.7"))
+TEMP_LONG_CTX = float(os.environ.get("LLM_TEMPERATURE_LONG_CTX", "0.3"))
+
 for i in range(MAX_ITERATIONS):
     # Thinking is off (/no_think) for multi-turn agent to prevent context overflow
     # Lower temperature when context grows large for more focused responses
-    use_think = total_tool_content < 20000
+    use_think = total_tool_content < LONG_CTX_THRESHOLD
 
     data = json.dumps({
         "model": model,
-        "max_tokens": 4096,
+        "max_tokens": int(os.environ.get("LLM_MAX_TOKENS_AGENT", "4096")),
         "messages": messages,
         "tools": TOOLS,
-        "temperature": 0.6 if use_think else 0.3,
-        "top_p": 0.95,
-        "top_k": 64,
-        "min_p": 0.0
+        "temperature": TEMP_DEFAULT if use_think else TEMP_LONG_CTX,
+        "top_p": float(os.environ.get("LLM_TOP_P", "0.95")),
+        "top_k": int(os.environ.get("LLM_TOP_K", "60")),
+        "min_p": float(os.environ.get("LLM_MIN_P", "0.0"))
     }).encode()
 
     req = urllib.request.Request(

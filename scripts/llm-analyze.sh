@@ -71,10 +71,12 @@ for filepath in files:
 try:
     data = json.dumps({
         "model": model,
-        "max_tokens": 16384,
+        "max_tokens": int(os.environ.get("LLM_MAX_TOKENS_ANALYZE", "16384")),
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.6,
-        "top_p": 0.95
+        "temperature": float(os.environ.get("LLM_TEMPERATURE", "0.7")),
+        "top_p": float(os.environ.get("LLM_TOP_P", "0.95")),
+        "top_k": int(os.environ.get("LLM_TOP_K", "60")),
+        "min_p": float(os.environ.get("LLM_MIN_P", "0.0"))
     }).encode()
     req = urllib.request.Request(
         f"{url}/v1/chat/completions", data=data,
