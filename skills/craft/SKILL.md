@@ -184,7 +184,7 @@ When `CRAFT_PROFILE` is `claude+ace`, SKIP the opus agent spec review below. Ins
 CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
 if [ "$CRAFT_PROFILE" = "claude+ace" ]; then
   CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-review.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
-  bash "$CRAFT_SCRIPTS/llm-review.sh" <spec-file-path> "completeness, feasibility, API alignment, architecture compliance, internal consistency"
+  bash "$CRAFT_SCRIPTS/llm-review.sh" <spec-file-path> "completeness, feasibility, API alignment, architecture compliance, internal consistency, security/safety"
 fi
 ```
 
@@ -192,7 +192,12 @@ fi
 1. Run `llm-review.sh` with the spec file
 2. Triage findings — fix confirmed issues in the spec
 3. Re-run `llm-review.sh` on the updated spec
-4. Repeat until Gemma returns APPROVED or no actionable findings remain (max 4 rounds to prevent infinite loops)
+4. Stop when **either** of these is true (whichever comes first):
+   - **2 consecutive clean rounds** ("No confirmed issues found" twice in a row) — high confidence the spec is stable
+   - **4 fix rounds total** — diminishing-returns ceiling, prevents infinite loops on wording nits
+5. If Gemma flips on the same wording across rounds (clean → finding → clean for the same item), stop after the second oscillation and treat the spec as approved.
+
+**Rationale:** The older "max 4 rounds" guidance was too aggressive — empirically Gemma often reopens spec wording details after one clean pass but stabilizes by the second. Going beyond ~6 rounds total has near-zero ROI. Adding `security/safety` to the review prompt catches SSRF / injection / DoS issues in the spec phase, where they're cheapest to fix.
 
 After the loop completes, skip directly to Step 1.11 (user review). Do NOT dispatch the opus agent or the parallel LLM review — Gemma handles both roles.
 
@@ -218,7 +223,7 @@ Only runs when profile includes `llm`. Run with Bash tool (`run_in_background: t
 CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
 case "$CRAFT_PROFILE" in
   *llm*)
-    CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && bash "$CRAFT_SCRIPTS/llm-review.sh" <spec-file-path> "completeness, feasibility, API alignment, architecture compliance"
+    CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && bash "$CRAFT_SCRIPTS/llm-review.sh" <spec-file-path> "completeness, feasibility, API alignment, architecture compliance, security/safety"
     ;;
   *)
     echo "LLM_SPEC_REVIEW_SKIPPED"
@@ -272,11 +277,11 @@ When `CRAFT_PROFILE` is `claude+ace`, SKIP the sonnet agent plan review below. I
 CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
 if [ "$CRAFT_PROFILE" = "claude+ace" ]; then
   CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-review.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
-  bash "$CRAFT_SCRIPTS/llm-review.sh" <plan-file-path> "spec coverage, task ordering, completeness, risk areas"
+  bash "$CRAFT_SCRIPTS/llm-review.sh" <plan-file-path> "spec coverage, task ordering, completeness, risk areas, security/safety"
 fi
 ```
 
-**Review loop:** Same as Step 1.10 — loop until Gemma approves or no actionable findings (max 4 rounds). After the loop, unload the model:
+**Review loop:** Same termination rules as Step 1.10 — stop when **either** 2 consecutive clean rounds occur OR 4 fix rounds have happened, whichever comes first. Treat oscillation on the same wording as approval. After the loop, unload the model:
 
 ```bash
 bash "$CRAFT_SCRIPTS/llm-unload.sh"
@@ -305,7 +310,7 @@ The agent should categorize findings as: Critical / Important / Minor / Suggesti
   CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
   case "$CRAFT_PROFILE" in
     *llm*)
-      CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && bash "$CRAFT_SCRIPTS/llm-review.sh" <plan-file-path> "spec coverage, task ordering, completeness, risk areas"
+      CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && bash "$CRAFT_SCRIPTS/llm-review.sh" <plan-file-path> "spec coverage, task ordering, completeness, risk areas, security/safety"
       bash "$CRAFT_SCRIPTS/llm-unload.sh"
       ;;
     *)
