@@ -76,6 +76,20 @@ See [Choosing a Variant](#choosing-a-variant) for detailed comparison with real 
 | **develop** | Execute an approved plan using parallel agents. |
 | **browser-test** | Run parallel browser-based UI tests. |
 
+### Design-Layer Skills
+
+Deterministic UI-quality gates. Invoked automatically by architect/craft/implement when the feature involves UI (no ambient auto-triggering — explicit, gated).
+
+| Skill | Description |
+|---|---|
+| **aesthetic-direction** | One-time-per-project design-language contract written to `.claude/aesthetic-direction.md`. Auto-generated on first UI feature, refineable by hand. Invokes `frontend-design` if installed; falls back to observed-tokens template if not. |
+| **ux-brief** | Per-feature UX brief with diagnosis + prioritized patches + success criteria, written to `.claude/plans/{feature}/ux-brief.md`. Solo mode uses `frontend-design` alone; combined mode adds `ui-ux-pro-max` for complex UI (triggered by explicit `complexity:` frontmatter or inferred from keywords). |
+| **design-review** | Post-develop visual regression + contract audit. Captures screenshots, dispatches Haiku-vision agent against the aesthetic direction and feature brief. Escalates to Sonnet only on MAJOR issues (Haiku-first cost model, ~15-20K tokens per audit). |
+
+**Optional external skills** (auto-detected, silent skip if not installed):
+- [`frontend-design`](https://claude.com/plugins/frontend-design) — required for quality briefs; falls back to template if missing
+- [`ui-ux-pro-max`](https://github.com/ui-ux-pro-max) — optional for combined mode on complex UI
+
 ### Process Skills
 
 | Skill | Description |

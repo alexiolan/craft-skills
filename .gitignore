@@ -12,3 +12,6 @@
 .codex-output-*.json
 AGENTS.md
 node_modules/
+
+# Local benchmarking infra (contains hardcoded paths)
+bench/
