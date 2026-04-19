@@ -75,7 +75,9 @@ Based on LLM findings, check for:
 - **Excessive error handling internally**: Trust internal code, don't over-validate
 - **Consistent naming**: Do new names follow existing codebase conventions?
 
-**UI/UX quality check (conditional):** If the `ui-ux-pro-max` skill is available AND changed files include UI components (`.tsx`, `.vue`, `.svelte`), invoke it to check for UI anti-patterns: inconsistent loading/error states, missing accessibility attributes, layout issues, and design system violations. Skip silently if not applicable.
+**UI/UX quality check (conditional, deterministic):** If the changed files include UI components (`.tsx`, `.vue`, `.svelte`) AND `.claude/aesthetic-direction.md` exists, invoke `craft-skills:design-review` via the Skill tool. It will screenshot the affected routes and audit them against the aesthetic direction and any feature `ux-brief.md`. This replaces the older opportunistic `ui-ux-pro-max` invocation — it is deterministic, visual (not just code-based), and cheap (Haiku-first, ~15K tokens per audit).
+
+If `.claude/aesthetic-direction.md` does not exist, skip silently (no-op). The user can enable this by running `craft-skills:aesthetic-direction` once.
 
 ## Step 6: Verification
 

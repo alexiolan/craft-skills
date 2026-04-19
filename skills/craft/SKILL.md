@@ -151,20 +151,40 @@ Present the design in sections, scaled to complexity:
 
 Save the validated design to `.claude/plans/specs/YYYY-MM-DD-{feature}-design.md`
 
-### 1.8 UI/UX Review (conditional)
+### 1.8 Design-Layer Gate (conditional, deterministic)
 
-**Skip this step unless BOTH conditions are met:**
-1. The `ui-ux-pro-max` skill is available (check via Skill tool)
-2. The project has UI components — CLAUDE.md references a UI framework (React, Vue, Svelte, Angular) OR the codebase contains `.tsx`, `.vue`, or `.svelte` files
+Replaces the earlier ambient "UI/UX Review." Fires only when the spec includes UI work, and invokes skills deterministically with transparent gating.
 
-If both conditions are met, invoke the `ui-ux-pro-max` skill to review the spec's UI-related sections: component layouts, interaction patterns, step flows, form design, table design, error states, loading states, and accessibility.
+**Skip this step unless the spec introduces UI** — new components, pages, forms, tables, modals, or modifications to any `.tsx`/`.vue`/`.svelte` file. For backend-only specs, jump to 1.9.
 
-Provide the skill with:
-- The spec's component architecture and step-by-step UX flow
-- The project's tech stack and UI framework context (from CLAUDE.md)
-- Any design images or mockups referenced in the requirements
+**1.8a — Ensure aesthetic direction exists:**
 
-Incorporate actionable UI/UX improvements into the spec before proceeding. Skip purely aesthetic suggestions that conflict with the project's existing design system.
+```bash
+if [ ! -f .claude/aesthetic-direction.md ]; then
+  echo "AESTHETIC_MISSING"
+else
+  echo "AESTHETIC_PRESENT"
+fi
+```
+
+If `AESTHETIC_MISSING`, invoke `craft-skills:aesthetic-direction` via the Skill tool. The skill generates `.claude/aesthetic-direction.md` non-blockingly (user can refine later). One-time cost per project.
+
+**1.8b — Generate UX brief:**
+
+Invoke `craft-skills:ux-brief` via the Skill tool with the spec path as argument. It will:
+- Parse complexity tags (explicit from `complexity:` frontmatter, or inferred from keywords like "comparison", "dashboard", "complex-form", "data-dense")
+- Run solo mode (`frontend-design` only) for simple UI or combined mode (`frontend-design` + `ui-ux-pro-max`) for complex UI
+- Write `.claude/plans/{feature-dir}/ux-brief.md` with diagnosis, prioritized patches, success criteria
+- Return path + mode + availability summary
+
+**1.8c — Incorporate brief into spec:**
+
+Read the returned `ux-brief.md`. Fold its key decisions into the spec:
+- Copy the "Success criteria" section into the spec's acceptance criteria
+- Reference the brief's P0 patches in the spec's UI component section — each becomes a spec requirement
+- Preserve the brief's "Layout-parity guards" — they are hard constraints downstream impl must honor
+
+**Fallback:** if `ux-brief` skill cannot run (e.g. `frontend-design` skill not installed), continue without it. Add a note to the spec: `> UX brief not generated (skill unavailable). Spec proceeds without design-layer contract.`
 
 ### 1.9 Spec Self-Review
 
@@ -335,9 +355,26 @@ Present summary and wait for user approval.
 
 Invoke `craft-skills:develop` with the approved plan.
 
+## Phase 3.5: Design Review (conditional)
+
+Runs only when UI files were created/modified (check `.shared-state.md` "Created / Modified Files" for `.tsx`/`.vue`/`.svelte` extensions).
+
+If UI files are present, invoke `craft-skills:design-review`. It:
+- Starts the dev server (if not running)
+- Captures screenshots of affected routes at desktop + mobile viewports
+- Dispatches a Haiku-vision agent to compare screenshots against `.claude/aesthetic-direction.md` and the feature's `ux-brief.md` success criteria
+- Writes `.claude/plans/{feature-dir}/design-review.md` with PASS / MINOR_ISSUES / MAJOR_ISSUES verdict
+
+Based on the verdict:
+- **PASS** → proceed to Phase 4
+- **MINOR_ISSUES** → the skill automatically dispatches a sonnet fix agent and re-runs review; continue when clean
+- **MAJOR_ISSUES** → STOP, report findings to user, await guidance before Phase 4
+
+Skip this phase silently if no UI files changed OR `.claude/aesthetic-direction.md` does not exist.
+
 ## Phase 4: Test
 
-After a successful build, invoke `craft-skills:browser-test` with the spec/plan.
+After a successful build AND design-review has passed (if applicable), invoke `craft-skills:browser-test` with the spec/plan.
 
 ## Phase 5: Report
 

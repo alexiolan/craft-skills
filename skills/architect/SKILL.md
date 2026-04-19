@@ -114,6 +114,49 @@ The agent should:
 
 Relay any clarification questions the architect raises to the user. Wait for answers before proceeding.
 
+### Step 1.5: Design-Layer Gate (conditional, deterministic)
+
+This step replaces the older ambient "UI/UX plan review." Instead of opportunistic skill auto-triggering, the design-layer runs explicitly and deterministically — only when the plan touches UI, with transparent gating on solo vs combined mode.
+
+**1.5a — Does the plan touch UI?**
+
+Inspect the plan's file list. If any target file matches `**/*.{tsx,vue,svelte,jsx}` or lives under `feature/`, `ui/`, `components/`, `pages/`, `src/app/**`, proceed. Otherwise skip the entire design-layer and jump to Step 2.
+
+**1.5b — Ensure aesthetic direction exists:**
+
+```bash
+if [ ! -f .claude/aesthetic-direction.md ]; then
+  echo "AESTHETIC_MISSING"
+else
+  echo "AESTHETIC_PRESENT"
+fi
+```
+
+- `AESTHETIC_PRESENT` → continue to 1.5c
+- `AESTHETIC_MISSING` → invoke `craft-skills:aesthetic-direction` via the Skill tool. It generates `.claude/aesthetic-direction.md` non-blockingly and returns. This is a one-time-per-project cost.
+
+**1.5c — Generate UX brief:**
+
+Invoke `craft-skills:ux-brief` via the Skill tool with the spec/plan path as argument.
+
+The `ux-brief` skill will:
+1. Parse complexity tags (explicit from spec frontmatter, or inferred from keywords)
+2. Invoke `frontend-design` (solo) or `frontend-design + ui-ux-pro-max` (combined) based on complexity
+3. Write `.claude/plans/{feature-dir}/ux-brief.md` with diagnosis + prioritized patches + success criteria
+4. Return the brief path and mode used
+
+**1.5d — Integrate brief into plan:**
+
+Read the returned `ux-brief.md`. For each P0/P1 patch in the brief:
+- Add corresponding tasks to the plan
+- Reference the brief's "Touch" and "Tokens to use" fields in each task
+- Preserve the brief's "Layout-parity guard" clauses — downstream agents must honor them
+- Include the brief's "Success criteria" in the plan's acceptance criteria section
+
+If the brief's priorities contradict the plan's task ordering, favor the brief — it has the UX reasoning.
+
+**Fallback:** if `ux-brief` skill is unavailable (e.g. `frontend-design` not installed), continue without a brief. Add a note to the plan: `> UX brief not generated (skill unavailable). UI implementation proceeds against CLAUDE.md conventions only.`
+
 ### Step 2: Plan Review
 
 Review the implementation plan and verify:
@@ -123,8 +166,7 @@ Review the implementation plan and verify:
 - Follows patterns documented in CLAUDE.md
 - Optimal approach with best practices
 - Existing components and utilities are reused where possible
-
-**UI/UX plan review (conditional):** If the `ui-ux-pro-max` skill is available AND the plan includes UI components (pages, forms, modals, tables), invoke it to review the plan's UI architecture: component hierarchy, interaction flows, loading/error states, and accessibility. Incorporate actionable suggestions into the plan. Skip if the project has no UI layer or the skill is not installed.
+- If Step 1.5 produced a ux-brief, the plan's UI tasks reflect the brief's P0/P1 patches and reference its success criteria
 
 Ask the user for approval:
 - If approved → save plan and report its path

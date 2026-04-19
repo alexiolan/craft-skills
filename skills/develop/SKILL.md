@@ -391,14 +391,44 @@ If the check returned `ADVERSARIAL_REVIEW_AVAILABLE`, invoke the `codex-plugin-c
 
 If the plugin is not installed or the profile excludes codex, skip this step silently. This is a bonus, not a dependency — no error, no warning, no prompt to the user.
 
-**Step C.6 — UI/UX review (conditional):**
+**Step C.6 — Removed (replaced by Step 3.75 design-review below).**
 
-If the `ui-ux-pro-max` skill is available AND `.shared-state.md` lists created/modified UI files (`.tsx`, `.vue`, `.svelte` extensions under `feature/`, `ui/`, `pages/`, `components/`, or similar), invoke it to review the implemented UI components for: layout quality, interaction patterns, loading/error states, accessibility, and design system consistency.
-
-Pass the list of UI files from shared state. Skip silently if the skill is not installed or no UI files were created.
+Previously this step invoked `ui-ux-pro-max` opportunistically. It is now replaced by the dedicated `design-review` skill in Step 3.75, which invokes `frontend-design` and (conditionally) `ui-ux-pro-max` deterministically against screenshots rather than just source code.
 
 **Step C — Act on findings:**
-If any review (graph, LLM, adversarial, or UI/UX) surfaces issues, dispatch targeted **sonnet** fix agents before proceeding to verification.
+If any review (graph, LLM, adversarial) surfaces issues, dispatch targeted **sonnet** fix agents before proceeding to verification.
+
+## Step 3.75: Design Review (conditional, deterministic)
+
+Runs only when the implementation touched UI files. Replaces the older opportunistic `ui-ux-pro-max` invocation in Step 3.5.C.6.
+
+**Gate check:**
+
+```bash
+# Detect UI files in .shared-state.md
+if [ -f .shared-state.md ] && grep -qE '\.(tsx|vue|svelte|jsx)' .shared-state.md; then
+  echo "UI_CHANGES_DETECTED"
+else
+  echo "NO_UI_CHANGES"
+fi
+```
+
+If `NO_UI_CHANGES`, skip to Step 4.
+
+If `UI_CHANGES_DETECTED` AND `.claude/aesthetic-direction.md` exists:
+
+Invoke `craft-skills:design-review` via the Skill tool. The skill:
+1. Starts the dev server (if not running)
+2. Captures screenshots of affected routes (desktop + mobile)
+3. Dispatches a Haiku-vision agent to compare against `aesthetic-direction.md` and the feature's `ux-brief.md` success criteria (if present)
+4. Returns PASS / MINOR_ISSUES / MAJOR_ISSUES verdict
+
+Based on the returned `next` field:
+- `proceed` → continue to Step 4 Verification
+- `fix-and-rerun` → the skill handles it: dispatches a sonnet fix agent and re-runs the review automatically. Resume Step 4 once the skill reports clean.
+- `escalate` → STOP. Report the design-review findings to the user. Do NOT proceed to verification until the user provides guidance (accept regressions, revise brief, revise implementation).
+
+**Fallback:** if `.claude/aesthetic-direction.md` does not exist OR `design-review` skill is unavailable, log: "Design review skipped — no aesthetic direction. Run craft-skills:aesthetic-direction to enable." Continue to Step 4.
 
 ## Step 4: Verification
 
