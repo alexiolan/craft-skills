@@ -162,6 +162,7 @@ If the brief's priorities contradict the plan's task ordering, favor the brief â
 Review the implementation plan and verify:
 
 - Alignment with requirements
+- **Prior-Art Scan table is present and filled** â€” every new type/enum/helper/util/hook/component introduced by the plan has a row documenting where the agent searched and what was found. A plan without this table, or with a row that admits prior art exists but the plan still specifies a new copy, must be rejected and sent back. This is the single biggest defense against duplication.
 - No duplication of existing codebase functionality (reuse > recreate)
 - Follows patterns documented in CLAUDE.md
 - Optimal approach with best practices

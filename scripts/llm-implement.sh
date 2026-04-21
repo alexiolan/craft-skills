@@ -118,6 +118,15 @@ if os.path.isfile(shared_state_path):
     with open(shared_state_path) as f:
         SHARED_STATE = f.read()[:4000]
 
+# Read the project's reuse index (if exists) — maintained inventory of shared
+# utilities, enums, hooks, components. Agents MUST consult this before writing
+# any new util/type/helper/label-map to avoid duplicating existing shared code.
+reuse_index_path = os.path.join(workdir, ".claude", "reuse-index.md")
+REUSE_INDEX = ""
+if os.path.isfile(reuse_index_path):
+    with open(reuse_index_path) as f:
+        REUSE_INDEX = f.read()[:6000]
+
 # Read reference files (max 20K chars total)
 REF_CONTENT = ""
 ref_total = 0
@@ -171,6 +180,11 @@ deviations: none | EXPLICIT description of any place you intentionally diverged 
 
 ## Reference Files (study these patterns)
 """ + REF_CONTENT + """
+
+## Project Reuse Index (MANDATORY to consult)
+""" + (REUSE_INDEX or "(no .claude/reuse-index.md found — rely on CLAUDE.md and ref files)") + """
+
+Before writing any new helper, util, enum, label-map, or hook, verify it is not already listed above. If an entry covers your need, import and reuse it instead of creating a parallel implementation.
 
 ## Current Shared State
 """ + (SHARED_STATE or "(empty)") + """

@@ -140,7 +140,7 @@ For each non-integration task:
    - Use `imports_of` on the reference to discover 1-2 key dependencies (max depth 1, max 3 files total)
    - Fallback to Glob if graph unavailable
 
-3. **Write task file** to `$PROJECT_ROOT/.llm-task-<task-id>.txt` with the task description from the plan
+3. **Write task file** to `$PROJECT_ROOT/.llm-task-<task-id>.txt` with the task description from the plan. `llm-implement.sh` auto-loads `.claude/reuse-index.md` (if present) into the SYSTEM_PROMPT — you do NOT need to copy it into the task file. If the project has no reuse-index, consider suggesting the user run `craft-skills:reuse-index` once to generate one (it's a one-time, project-agnostic scan; output stays local).
 
 4. **Extract allowed file paths** from the plan step (the files the task says to create/modify)
 
@@ -428,7 +428,23 @@ Based on the returned `next` field:
 - `fix-and-rerun` → the skill handles it: dispatches a sonnet fix agent and re-runs the review automatically. Resume Step 4 once the skill reports clean.
 - `escalate` → STOP. Report the design-review findings to the user. Do NOT proceed to verification until the user provides guidance (accept regressions, revise brief, revise implementation).
 
-**Fallback:** if `.claude/aesthetic-direction.md` does not exist OR `design-review` skill is unavailable, log: "Design review skipped — no aesthetic direction. Run craft-skills:aesthetic-direction to enable." Continue to Step 4.
+**Fallback:** if `.claude/aesthetic-direction.md` does not exist OR `design-review` skill is unavailable, log: "Design review skipped — no aesthetic direction. Run craft-skills:aesthetic-direction to enable." Continue to Step 3.8.
+
+## Step 3.8: Reuse / Simplify Audit (auto)
+
+Before verification, invoke `craft-skills:simplify` via the Skill tool on the changed files listed in `.shared-state.md`. This catches duplication and premature abstractions that slipped past Gemma reviews and graph analysis — the specific class of miss that pre-implementation prior-art scans can't catch (e.g. a util I typed verbatim that happens to match a shared util the planner didn't flag).
+
+The simplify skill will:
+1. Analyze the changed files with graph + LLM (or fall back to reading them directly)
+2. Flag reuse opportunities (missed shared components/utilities), architecture boundary violations, premature abstractions, unnecessary complexity
+3. Report findings back
+
+Based on what simplify reports:
+- **No issues** → continue to Step 4 Verification
+- **Reuse opportunities flagged** → dispatch a targeted **sonnet** fix agent to apply the dedupe patches, then re-run lint/tsc. Only escalate to the user if fixes introduce regressions or scope ambiguity
+- **Architecture violations flagged** → STOP, report to the user, await guidance
+
+Skip this step silently if the `simplify` skill is unavailable.
 
 ## Step 4: Verification
 

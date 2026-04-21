@@ -95,7 +95,8 @@ Deterministic UI-quality gates. Invoked automatically by architect/craft/impleme
 | Skill | Description |
 |---|---|
 | **debug** | Systematic root-cause investigation before attempting any fix. |
-| **simplify** | Review changed code for reuse opportunities and architecture compliance. |
+| **simplify** | Review changed code for reuse opportunities and architecture compliance. Auto-invoked by `develop` after implementation, before verification. |
+| **reuse-index** | One-time-per-project inventory of shared utilities, enums, hooks, and components written to `.claude/reuse-index.md`. Downstream agents (`architect`, `develop`, `simplify`) consult it before writing any new util/type/helper. Same pattern as `aesthetic-direction` but for code-reuse discipline. Project-agnostic scan; no framework assumptions. |
 | **reflect** | Audit project configs, maintain skill health, sync upstream. |
 
 ## Getting Started

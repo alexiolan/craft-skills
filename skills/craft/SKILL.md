@@ -151,6 +151,9 @@ Present the design in sections, scaled to complexity:
 
 Save the validated design to `.claude/plans/specs/YYYY-MM-DD-{feature}-design.md`
 
+**Prior-Art Scan (MANDATORY section in the spec):**
+Before saving, include a "Prior-Art Scan" table in the spec for every new concept (type, enum, helper, util, hook, component, shared constant) it introduces. Each row records: the concept, where you searched (graph queries, globs, greps), whether prior art exists, and the decision (reuse / extend / justify new). If `.claude/reuse-index.md` exists at the project root, consult it before searching and cite matching entries in the row. Common false-negative traps to always search for: date formatting, HTTP clients, toast/notification primitives, icon wrappers, drawer/modal/accordion primitives, enum→label maps, relative-time helpers, string normalizers, pluralization.
+
 ### 1.8 Design-Layer Gate (conditional, deterministic)
 
 Replaces the earlier ambient "UI/UX Review." Fires only when the spec includes UI work, and invokes skills deterministically with transparent gating.
@@ -204,7 +207,7 @@ When `CRAFT_PROFILE` is `claude+ace`, SKIP the opus agent spec review below. Ins
 CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
 if [ "$CRAFT_PROFILE" = "claude+ace" ]; then
   CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-review.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
-  bash "$CRAFT_SCRIPTS/llm-review.sh" <spec-file-path> "completeness, feasibility, API alignment, architecture compliance, internal consistency, security/safety"
+  bash "$CRAFT_SCRIPTS/llm-review.sh" <spec-file-path> "completeness, feasibility, API alignment, architecture compliance, internal consistency, security/safety, reuse/duplication (any new util/type/helper that duplicates an existing shared implementation)"
 fi
 ```
 
@@ -243,7 +246,7 @@ Only runs when profile includes `llm`. Run with Bash tool (`run_in_background: t
 CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
 case "$CRAFT_PROFILE" in
   *llm*)
-    CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && bash "$CRAFT_SCRIPTS/llm-review.sh" <spec-file-path> "completeness, feasibility, API alignment, architecture compliance, security/safety"
+    CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && bash "$CRAFT_SCRIPTS/llm-review.sh" <spec-file-path> "completeness, feasibility, API alignment, architecture compliance, security/safety, reuse/duplication (any new util/type/helper that duplicates an existing shared implementation)"
     ;;
   *)
     echo "LLM_SPEC_REVIEW_SKIPPED"
@@ -297,7 +300,7 @@ When `CRAFT_PROFILE` is `claude+ace`, SKIP the sonnet agent plan review below. I
 CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
 if [ "$CRAFT_PROFILE" = "claude+ace" ]; then
   CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-review.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
-  bash "$CRAFT_SCRIPTS/llm-review.sh" <plan-file-path> "spec coverage, task ordering, completeness, risk areas, security/safety"
+  bash "$CRAFT_SCRIPTS/llm-review.sh" <plan-file-path> "spec coverage, task ordering, completeness, risk areas, security/safety, reuse/duplication (flag any new util/type/helper the plan creates that duplicates an existing shared implementation)"
 fi
 ```
 
@@ -330,7 +333,7 @@ The agent should categorize findings as: Critical / Important / Minor / Suggesti
   CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
   case "$CRAFT_PROFILE" in
     *llm*)
-      CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && bash "$CRAFT_SCRIPTS/llm-review.sh" <plan-file-path> "spec coverage, task ordering, completeness, risk areas, security/safety"
+      CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && bash "$CRAFT_SCRIPTS/llm-review.sh" <plan-file-path> "spec coverage, task ordering, completeness, risk areas, security/safety, reuse/duplication (flag any new util/type/helper the plan creates that duplicates an existing shared implementation)"
       bash "$CRAFT_SCRIPTS/llm-unload.sh"
       ;;
     *)

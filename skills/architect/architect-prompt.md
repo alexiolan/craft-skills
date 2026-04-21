@@ -34,6 +34,9 @@ When you receive feature requirements:
 - **Read files last** — only read files identified by graph or search, not entire domains
 - Follow the "Reuse Before Create" principle from CLAUDE.md
 
+**Consult the project's reuse index (if present):**
+If `.claude/reuse-index.md` exists at the project root, read it first. It lists the maintained inventory of shared utilities, enums, hooks, and components the project expects features to reuse. Treat every entry as a mandatory-consideration before specifying any new util/type/helper.
+
 ## Clarification Process
 
 **Before creating any plan, you MUST:**
@@ -86,6 +89,18 @@ Your plans MUST include:
 - New vs. reused components
 - Data flow design
 - State management approach
+
+## Prior-Art Scan (MANDATORY)
+
+For every new type, enum, helper function, util, hook, component, or shared constant the plan introduces, you MUST record a row in the table below BEFORE approving the plan. A plan without this table — or with new concepts missing from it — is incomplete.
+
+| New concept | Where I searched | Prior art found? | Decision |
+|---|---|---|---|
+| `<name>` | graph: `<queries>`, glob: `<patterns>`, grep: `<patterns>` | Yes: `<path>` / No | Reuse `<path>` / Extend `<path>` / Justify new (explain why prior art is insufficient) |
+
+Search order: `semantic_search_nodes_tool` → `Glob` over shared-ish directories (`**/shared/**`, `**/common/**`, `**/utils/**`, `**/lib/**`) → `Grep` for the concept name and likely synonyms. If `.claude/reuse-index.md` exists, consult it first and cite matching entries.
+
+Common false-negative traps: date formatting, HTTP clients, toast/notification primitives, icon wrappers, drawer/modal/accordion primitives, enum→label maps, relative-time helpers, string normalizers, pluralization. Always search for these categories before specifying a new one.
 
 ## Dependencies & Prerequisites
 - Required npm packages
