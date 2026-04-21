@@ -147,9 +147,27 @@ Present the design in sections, scaled to complexity:
 - Cover: architecture, components, data flow, error handling
 - Be ready to revise if something doesn't make sense
 
+### 1.6.5 Reuse-Index Gate (conditional, non-blocking)
+
+Before writing the spec (which now requires a Prior-Art Scan table — see below), ensure the project's reuse contract exists.
+
+```bash
+if [ ! -f .claude/reuse-index.md ]; then
+  echo "REUSE_INDEX_MISSING"
+else
+  echo "REUSE_INDEX_PRESENT"
+fi
+```
+
+- `REUSE_INDEX_PRESENT` → continue to 1.7.
+- `REUSE_INDEX_MISSING` → invoke `craft-skills:reuse-index` via the Skill tool. Non-blocking, one-time-per-project cost. Mirrors the `aesthetic-direction` gate at 1.8a. Continue once the skill returns (or is skipped).
+
 ### 1.7 Write Spec
 
 Save the validated design to `.claude/plans/specs/YYYY-MM-DD-{feature}-design.md`
+
+**Prior-Art Scan (MANDATORY section in the spec):**
+Before saving, include a "Prior-Art Scan" table in the spec for every new concept (type, enum, helper, util, hook, component, shared constant) it introduces. Each row records: the concept, where you searched (graph queries, globs, greps), whether prior art exists, and the decision (reuse / extend / justify new). If `.claude/reuse-index.md` exists at the project root, consult it before searching and cite matching entries in the row. Common false-negative traps to always search for: date formatting, HTTP clients, toast/notification primitives, icon wrappers, drawer/modal/accordion primitives, enum→label maps, relative-time helpers, string normalizers, pluralization.
 
 ### 1.8 Design-Layer Gate (conditional, deterministic)
 
@@ -204,7 +222,7 @@ When `CRAFT_PROFILE` is `claude+ace`, SKIP the opus agent spec review below. Ins
 CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
 if [ "$CRAFT_PROFILE" = "claude+ace" ]; then
   CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-review.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
-  bash "$CRAFT_SCRIPTS/llm-review.sh" <spec-file-path> "completeness, feasibility, API alignment, architecture compliance, internal consistency, security/safety"
+  bash "$CRAFT_SCRIPTS/llm-review.sh" <spec-file-path> "completeness, feasibility, API alignment, architecture compliance, internal consistency, security/safety, reuse/duplication (any new util/type/helper that duplicates an existing shared implementation)"
 fi
 ```
 
@@ -243,7 +261,7 @@ Only runs when profile includes `llm`. Run with Bash tool (`run_in_background: t
 CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
 case "$CRAFT_PROFILE" in
   *llm*)
-    CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && bash "$CRAFT_SCRIPTS/llm-review.sh" <spec-file-path> "completeness, feasibility, API alignment, architecture compliance, security/safety"
+    CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && bash "$CRAFT_SCRIPTS/llm-review.sh" <spec-file-path> "completeness, feasibility, API alignment, architecture compliance, security/safety, reuse/duplication (any new util/type/helper that duplicates an existing shared implementation)"
     ;;
   *)
     echo "LLM_SPEC_REVIEW_SKIPPED"
@@ -297,7 +315,7 @@ When `CRAFT_PROFILE` is `claude+ace`, SKIP the sonnet agent plan review below. I
 CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
 if [ "$CRAFT_PROFILE" = "claude+ace" ]; then
   CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-review.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1)
-  bash "$CRAFT_SCRIPTS/llm-review.sh" <plan-file-path> "spec coverage, task ordering, completeness, risk areas, security/safety"
+  bash "$CRAFT_SCRIPTS/llm-review.sh" <plan-file-path> "spec coverage, task ordering, completeness, risk areas, security/safety, reuse/duplication (flag any new util/type/helper the plan creates that duplicates an existing shared implementation)"
 fi
 ```
 
@@ -330,7 +348,7 @@ The agent should categorize findings as: Critical / Important / Minor / Suggesti
   CRAFT_PROFILE=$(cat .craft-profile 2>/dev/null || echo "claude")
   case "$CRAFT_PROFILE" in
     *llm*)
-      CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && bash "$CRAFT_SCRIPTS/llm-review.sh" <plan-file-path> "spec coverage, task ordering, completeness, risk areas, security/safety"
+      CRAFT_SCRIPTS=$(find ~/.claude/plugins -name "llm-agent.sh" -path "*/craft-skills/*" -exec dirname {} \; 2>/dev/null | head -1) && bash "$CRAFT_SCRIPTS/llm-review.sh" <plan-file-path> "spec coverage, task ordering, completeness, risk areas, security/safety, reuse/duplication (flag any new util/type/helper the plan creates that duplicates an existing shared implementation)"
       bash "$CRAFT_SCRIPTS/llm-unload.sh"
       ;;
     *)

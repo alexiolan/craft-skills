@@ -96,6 +96,23 @@ Load graph MCP tools via ToolSearch (search for "code-review-graph"), then run:
 
 Wait for both agents to complete. Pass their findings to the architect agent in Step 1.
 
+### Step 0.5: Reuse-Index Gate (conditional, non-blocking)
+
+The architect's plan will require a Prior-Art Scan table against the project's shared surface (Step 2). A pre-generated `.claude/reuse-index.md` makes that scan cheap and reliable; without one, agents fall back to ad-hoc grep and miss more.
+
+```bash
+if [ ! -f .claude/reuse-index.md ]; then
+  echo "REUSE_INDEX_MISSING"
+else
+  echo "REUSE_INDEX_PRESENT"
+fi
+```
+
+- `REUSE_INDEX_PRESENT` → continue to Step 1.
+- `REUSE_INDEX_MISSING` → invoke `craft-skills:reuse-index` via the Skill tool. It auto-detects the project's shared directory (asks if it can't), scans exported symbols, and writes `.claude/reuse-index.md`. Non-blocking — the pipeline continues even if generation is skipped. One-time-per-project cost; mirrors the `aesthetic-direction` pattern.
+
+**Fallback:** if `reuse-index` skill is unavailable OR the user skips the auto-detection prompt, continue without it. The Prior-Art Scan table in Step 2 will rely on ad-hoc searches.
+
 ### Step 1: Dispatch Architect Agent
 
 Dispatch an **implementation-architect** agent (**opus model**) using the Agent tool. Read the agent prompt template from the `architect-prompt.md` file in this skill's directory, then append the requirements to it.
@@ -162,6 +179,7 @@ If the brief's priorities contradict the plan's task ordering, favor the brief �
 Review the implementation plan and verify:
 
 - Alignment with requirements
+- **Prior-Art Scan table is present and filled** — every new type/enum/helper/util/hook/component introduced by the plan has a row documenting where the agent searched and what was found. A plan without this table, or with a row that admits prior art exists but the plan still specifies a new copy, must be rejected and sent back. This is the single biggest defense against duplication.
 - No duplication of existing codebase functionality (reuse > recreate)
 - Follows patterns documented in CLAUDE.md
 - Optimal approach with best practices
