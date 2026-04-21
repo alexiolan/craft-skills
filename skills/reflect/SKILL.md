@@ -63,6 +63,23 @@ For each prompt in `.claude/prompts/`:
 1. Check if the feature has been implemented
 2. If implemented, propose archiving
 
+### 1.6 Project Contracts Freshness
+
+Audit the one-time, project-level contract files that downstream craft-skills consume. Each has the same lifecycle: generated once per project, hand-editable, needs occasional refresh when the underlying reality changes.
+
+**`.claude/aesthetic-direction.md`:**
+- If missing: suggest running `craft-skills:aesthetic-direction` once (only relevant for projects with a UI).
+- If present and older than 180 days: ask whether the design system has changed since; offer regeneration.
+
+**`.claude/reuse-index.md`:**
+- If missing: suggest running `craft-skills:reuse-index` once. Without it, every planning session falls back to ad-hoc grep.
+- If present and older than 60 days: compare entries against the current shared directory. If >5 top-level shared files exist whose exports aren't in the index, flag it as stale and suggest `craft-skills:reuse-index --force`.
+- If the index's "What NOT to duplicate" section has hand-edited entries, preserve them across regeneration — call this out when suggesting a refresh.
+
+**`CLAUDE.md` (parent + project):** already covered by 1.1 and 1.2 above.
+
+Freshness is advisory, not enforced — `reflect` only suggests, the human decides.
+
 ## Phase 2: Evolve
 
 Discover patterns in how you work and propose improvements to project configuration.

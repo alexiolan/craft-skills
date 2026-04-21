@@ -147,6 +147,21 @@ Present the design in sections, scaled to complexity:
 - Cover: architecture, components, data flow, error handling
 - Be ready to revise if something doesn't make sense
 
+### 1.6.5 Reuse-Index Gate (conditional, non-blocking)
+
+Before writing the spec (which now requires a Prior-Art Scan table — see below), ensure the project's reuse contract exists.
+
+```bash
+if [ ! -f .claude/reuse-index.md ]; then
+  echo "REUSE_INDEX_MISSING"
+else
+  echo "REUSE_INDEX_PRESENT"
+fi
+```
+
+- `REUSE_INDEX_PRESENT` → continue to 1.7.
+- `REUSE_INDEX_MISSING` → invoke `craft-skills:reuse-index` via the Skill tool. Non-blocking, one-time-per-project cost. Mirrors the `aesthetic-direction` gate at 1.8a. Continue once the skill returns (or is skipped).
+
 ### 1.7 Write Spec
 
 Save the validated design to `.claude/plans/specs/YYYY-MM-DD-{feature}-design.md`
